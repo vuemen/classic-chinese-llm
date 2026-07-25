@@ -183,6 +183,11 @@ class TrainingConfig(BaseModel):
             raise ValueError("必须提供 max_steps 或 max_epochs 中的一个")
         return self
 
+class DataConfig(BaseModel):
+    """数据配置（SFT 使用）"""
+    max_samples: int = Field(default=15000, ge=1)
+    val_split: float = Field(default=0.05, ge=0.0, le=1.0)
+
 # ─── 顶层配置模型 ───────────────────────────────────────
 
 class Settings(BaseSettings):
@@ -221,6 +226,7 @@ class SFTConfig(Settings):
         )
     )
     chat_template: str = "classical_chinese_v1"
+    data: DataConfig = Field(default_factory=DataConfig)
 ```
 
 ### 3.4 路径管理

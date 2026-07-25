@@ -225,7 +225,7 @@ def detect_device(prefer: str = "cuda") -> DeviceInfo:
     if prefer == "cuda" and torch.cuda.is_available():
         device = torch.device("cuda")
         props = torch.cuda.get_device_properties(0)
-        vram_total = props.total_mem / (1024 ** 3)
+        vram_total = props.total_memory / (1024 ** 3)
         vram_free = (torch.cuda.mem_get_info()[0]) / (1024 ** 3)
 
         return DeviceInfo(
@@ -482,10 +482,10 @@ def find_latest_checkpoint(checkpoint_dir: str | Path) -> Optional[Path]:
     if latest.exists():
         return latest
 
-    # 其次：按修改时间找最新的 step checkpoint
+    # 其次：按 step 编号找最新的 step checkpoint
     checkpoints = sorted(
         ckpt_dir.glob("checkpoint_step_*.pt"),
-        key=lambda p: p.stat().st_mtime,
+        key=_extract_step_number,
         reverse=True,
     )
     if checkpoints:
@@ -518,13 +518,25 @@ def _rotate_checkpoints(checkpoint_dir: str | Path, keep: int) -> None:
     ckpt_dir = Path(checkpoint_dir)
     step_checkpoints = sorted(
         ckpt_dir.glob("checkpoint_step_*.pt"),
-        key=lambda p: p.stat().st_mtime,
+        key=_extract_step_number,
     )
     for old in step_checkpoints[:-max(0, keep)]:
         logger.debug("清理旧 checkpoint: %s", old)
         old.unlink(missing_ok=True)
         # 同时清理配套的 json 元信息
         old.with_suffix(".json").unlink(missing_ok=True)
+
+
+def _extract_step_number(path: Path) -> int:
+    """从 checkpoint_step_XXXX.pt 文件名中提取步数。"""
+    name = path.stem
+    parts = name.rsplit("_", 1)
+    if len(parts) == 2:
+        try:
+            return int(parts[1])
+        except ValueError:
+            pass
+    return 0
 ```
 
 ---
