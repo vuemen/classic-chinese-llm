@@ -42,5 +42,3 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Pre-commit
-.pre-commit-config.yaml
