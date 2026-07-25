@@ -1,0 +1,19 @@
+# 指令微调配置 — 继承 default.yaml
+extends: "default.yaml"
+
+training:
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 100
+  max_epochs: 3
+  eval_every: 200
+  save_every: 500
+  max_checkpoints: 3
+
+chat_template: "classical_chinese_v1"
+
+data:
+  max_samples: 15000
+  val_split: 0.05
