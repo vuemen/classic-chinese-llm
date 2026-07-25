@@ -34,18 +34,6 @@ htmlcov/
 # Linting
 .ruff_cache/
 
-# Data (large files, git-ignored; keep .gitkeep)
-data/*
-!data/.gitkeep
-
-# Models (large files, git-ignored; keep .gitkeep)
-models/*
-!models/.gitkeep
-
-# Outputs (logs, results)
-outputs/*
-!outputs/.gitkeep
-
 # Environment
 .env
 .env.local
