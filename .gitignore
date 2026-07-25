@@ -35,15 +35,16 @@ htmlcov/
 .ruff_cache/
 
 # Data (large files, git-ignored; keep .gitkeep)
-data/
+data/*
 !data/.gitkeep
 
 # Models (large files, git-ignored; keep .gitkeep)
-models/
+models/*
 !models/.gitkeep
 
 # Outputs (logs, results)
-outputs/
+outputs/*
+!outputs/.gitkeep
 
 # Environment
 .env
