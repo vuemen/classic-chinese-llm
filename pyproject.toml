@@ -104,6 +104,14 @@ exclude = "build|dist|\\.venv|\\.tox"
 module = "yaml"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "tokenizers"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "transformers"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
