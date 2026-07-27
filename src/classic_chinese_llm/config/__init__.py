@@ -15,6 +15,7 @@ import yaml
 
 from classic_chinese_llm.config.paths import PathConfig
 from classic_chinese_llm.config.settings import (
+    CollectorConfig,
     DataConfig,
     LoggingConfig,
     ModelConfig,
@@ -101,6 +102,7 @@ __all__ = [
     "Settings",
     "PretrainConfig",
     "SFTConfig",
+    "CollectorConfig",
     "DataConfig",
     "LoggingConfig",
     "ModelConfig",

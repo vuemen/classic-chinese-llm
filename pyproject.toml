@@ -30,6 +30,7 @@ data = [
     "beautifulsoup4>=4.12",
     "lxml>=5.0",
     "datasketch>=1.6",
+    "chardet>=5.0",
 ]
 chat = [
     "gradio>=5.0",

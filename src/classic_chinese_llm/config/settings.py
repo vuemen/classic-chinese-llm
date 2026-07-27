@@ -81,6 +81,16 @@ class DataConfig(BaseModel):
     val_split: float = Field(default=0.05, ge=0.0, le=1.0)
 
 
+class CollectorConfig(BaseModel):
+    """数据采集配置。"""
+
+    retry_attempts: int = Field(default=3, ge=1, le=10)
+    retry_backoff: float = Field(default=2.0, ge=1.0, le=10.0)
+    enabled_sources: list[str] = Field(
+        default_factory=lambda: ["daizhige", "wikisource", "github", "siku", "ctext"]
+    )
+
+
 # ─── 顶层配置模型 ───────────────────────────────────────────────────────
 
 

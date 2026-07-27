@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+
+# 将 src/ 加入 Python 搜索路径，使测试能 import classic_chinese_llm 而无需 pip install
+_src_path = Path(__file__).resolve().parent.parent / "src"
+if str(_src_path) not in sys.path:
+    sys.path.insert(0, str(_src_path))
 
 
 @pytest.fixture
