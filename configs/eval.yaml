@@ -1,0 +1,30 @@
+# 评测配置
+# 用法: python scripts/evaluate.py --checkpoint <path> --test-data <path>
+
+# 评测样本上限
+max_samples: 500
+
+# 启用的评测指标
+# 可选: perplexity, bleu, rouge_l, char_accuracy, classical_chinese_score
+metrics:
+  - perplexity
+  - bleu
+  - rouge_l
+  - char_accuracy
+  - classical_chinese_score
+
+# 生成参数（评测时建议 temperature=0 确定性生成）
+generation:
+  max_new_tokens: 256
+  temperature: 0.0
+  top_p: 1.0
+  top_k: 0
+  do_sample: false
+  repetition_penalty: 1.0
+
+# Chat 模板（指令模型评测时启用，base 模型留空）
+# 可选: classical_chinese_v1
+chat_template: null
+
+# 报告输出目录（null 表示仅输出到终端）
+output_dir: null

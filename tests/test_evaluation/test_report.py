@@ -27,21 +27,26 @@ class TestEvalSample:
 class TestEvalReport:
     """EvalReport 测试。"""
 
-    def _make_report(self, tmp_path: Path) -> EvalReport:
+    def _make_report(self, tmp_path: Path, with_classical: bool = False) -> EvalReport:
         """创建测试用的 EvalReport。"""
         config = EvalConfig(max_samples=10, output_dir=tmp_path)
+        metrics1 = {"bleu": 0.8}
+        metrics2 = {"bleu": 0.6}
+        if with_classical:
+            metrics1["classical_总分"] = 0.85
+            metrics2["classical_总分"] = 0.45
         samples = [
             EvalSample(
                 prompt="Q1",
                 reference="A1",
                 prediction="A1_pred",
-                metrics={"bleu": 0.8},
+                metrics=metrics1,
             ),
             EvalSample(
                 prompt="Q2",
                 reference="A2",
                 prediction="A2_pred",
-                metrics={"bleu": 0.6},
+                metrics=metrics2,
             ),
         ]
         return EvalReport(
@@ -84,3 +89,50 @@ class TestEvalReport:
 
         for key in ["config", "samples", "aggregate_metrics", "timestamp", "model_info"]:
             assert key in data, f"缺少必要字段: {key}"
+
+    def test_to_markdown(self, temp_dir: Path) -> None:
+        """to_markdown 应生成有效的 Markdown 文件。"""
+        report = self._make_report(temp_dir, with_classical=True)
+        output_path = temp_dir / "eval_report.md"
+        report.to_markdown(output_path)
+
+        assert output_path.exists()
+        content = output_path.read_text(encoding="utf-8")
+
+        # 应包含核心章节标题
+        assert "# 文言文 LLM 评测报告" in content
+        assert "## 聚合指标" in content
+        assert "## 指标分布" in content
+        assert "## 极端样本" in content
+        assert "## 逐样本详情" in content
+        # 应包含指标值
+        assert "0.7000" in content
+
+    def test_to_markdown_empty_samples(self, temp_dir: Path) -> None:
+        """to_markdown 应能处理空样本列表。"""
+        config = EvalConfig(max_samples=10, output_dir=temp_dir)
+        report = EvalReport(
+            config=config,
+            samples=[],
+            aggregate_metrics={},
+            timestamp="2026-07-28T00:00:00",
+            model_info={},
+        )
+        output_path = temp_dir / "empty_report.md"
+        report.to_markdown(output_path)
+
+        assert output_path.exists()
+        content = output_path.read_text(encoding="utf-8")
+        assert "无样本" in content
+
+    def test_create_factory(self) -> None:
+        """create() 工厂方法应自动填充时间戳。"""
+        config = EvalConfig(max_samples=10)
+        report = EvalReport.create(
+            config=config,
+            samples=[],
+            aggregate_metrics={"bleu": 0.5},
+        )
+        assert report.timestamp
+        assert "T" in report.timestamp  # ISO 8601 格式
+        assert report.aggregate_metrics["bleu"] == 0.5

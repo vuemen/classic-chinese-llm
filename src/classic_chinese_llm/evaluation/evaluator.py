@@ -14,6 +14,7 @@ from classic_chinese_llm.evaluation.config import EvalConfig
 from classic_chinese_llm.evaluation.metrics import (
     calc_bleu,
     calc_char_accuracy,
+    calc_classical_chinese_score,
     calc_perplexity,
     calc_rouge_l,
 )
@@ -23,8 +24,22 @@ from classic_chinese_llm.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# 类型别名: tokenizer 解码函数
+# ─── 类型别名 ────────────────────────────────────────────────────────────────
+
+EncodeFn = Callable[[str], list[int]]
 DecodeFn = Callable[[list[int]], str]
+
+
+def _build_chatml_prompt(user_text: str) -> str:
+    """将用户文本包装为 ChatML 格式的 prompt。
+
+    Args:
+        user_text: 用户输入文本。
+
+    Returns:
+        str: 完整的 ChatML 格式 prompt（含 assistant 前缀）。
+    """
+    return f"<|user|>\n{user_text}\n<|end|>\n" "<|assistant|>\n"
 
 
 class Evaluator:
@@ -33,12 +48,13 @@ class Evaluator:
     职责:
     1. 加载 ChatML/JSONL 格式的测试数据集
     2. 逐条生成模型预测
-    3. 计算所有已注册指标
-    4. 生成并输出评测报告
+    3. 计算所有已注册指标（含文言文质量评分）
+    4. 生成并输出评测报告（JSON + Markdown）
 
     Args:
         model: TransformerLM 模型实例 (置于目标设备)。
         generator: Generator 生成器实例。
+        tokenizer_encode_fn: 将文本编码为 token ID 列表的函数。
         tokenizer_decode_fn: 将 token ID 列表解码为文本的函数。
         config: 评测配置。
     """
@@ -47,11 +63,13 @@ class Evaluator:
         self,
         model: nn.Module,
         generator: Generator,
+        tokenizer_encode_fn: EncodeFn,
         tokenizer_decode_fn: DecodeFn,
         config: EvalConfig | None = None,
     ) -> None:
         self.model = model
         self.generator = generator
+        self.encode = tokenizer_encode_fn
         self.decode = tokenizer_decode_fn
         self.config = config or EvalConfig()
         self._device = next(model.parameters()).device
@@ -60,7 +78,7 @@ class Evaluator:
         """执行完整评测流程。
 
         Args:
-            test_data_path: ChatML 格式的测试数据 JSONL 文件。
+            test_data_path: ChatML/JSONL 格式的测试数据文件。
 
         Returns:
             EvalReport: 包含所有样本和聚合指标的评测报告。
@@ -88,30 +106,31 @@ class Evaluator:
             self.config.output_dir.mkdir(parents=True, exist_ok=True)
             json_path = self.config.output_dir / "eval_report.json"
             report.to_json(json_path)
-            logger.info("评测报告已保存: %s", json_path)
+            logger.info("JSON 报告已保存: %s", json_path)
+
+            md_path = self.config.output_dir / "eval_report.md"
+            report.to_markdown(md_path)
+            logger.info("Markdown 报告已保存: %s", md_path)
 
         return report
+
+    # ─── 生成 ────────────────────────────────────────────────────────────────
 
     def _generate_responses(
         self, samples_data: list[dict[str, Any]]
     ) -> tuple[list[EvalSample], float, int]:
         """逐条生成模型回答并计算逐样本指标。
 
-        对每条样本: 编码 prompt → 生成 → 解码 → 计算逐样本指标。
-        同时累积 perplexity 计算所需的 cross-entropy loss。
-
         Args:
             samples_data: 加载后的样本字典列表。
 
         Returns:
-            (eval_samples, total_loss, total_tokens):
-            - eval_samples: 评测样本列表
-            - total_loss: 累积 cross-entropy loss
-            - total_tokens: 累积 token 数
+            (eval_samples, total_loss, total_tokens)
         """
         eval_samples: list[EvalSample] = []
         total_loss = 0.0
         total_tokens = 0
+
         for data in samples_data:
             sample = self._generate_one(data)
             eval_samples.append(sample)
@@ -134,7 +153,7 @@ class Evaluator:
         """生成单条样本。
 
         Args:
-            data: 包含 prompt、reference 和 input_ids 的样本字典。
+            data: 包含 prompt、reference、input_ids 的样本字典。
 
         Returns:
             EvalSample: 单条评测结果。
@@ -159,6 +178,10 @@ class Evaluator:
             sample_metrics["rouge_l"] = calc_rouge_l([prediction], [[reference]])
         if "char_accuracy" in self.config.metrics:
             sample_metrics["char_accuracy"] = calc_char_accuracy([prediction], [[reference]])
+        if "classical_chinese_score" in self.config.metrics:
+            ccs = calc_classical_chinese_score(prediction)
+            for key, value in ccs.items():
+                sample_metrics[f"classical_{key}"] = value
 
         return EvalSample(
             prompt=prompt,
@@ -166,6 +189,8 @@ class Evaluator:
             prediction=prediction,
             metrics=sample_metrics,
         )
+
+    # ─── 数据加载 ────────────────────────────────────────────────────────────
 
     def _load_samples(self, path: Path) -> list[dict[str, Any]]:
         """从 JSONL 文件加载评测样本。
@@ -187,7 +212,6 @@ class Evaluator:
                     continue
                 record = json.loads(line)
 
-                # 提取 prompt 和 reference
                 extracted = self._extract_prompt_ref(record)
                 if extracted is None:
                     continue
@@ -201,17 +225,18 @@ class Evaluator:
         return samples
 
     def _extract_prompt_ref(self, record: dict[str, Any]) -> dict[str, Any] | None:
-        """从单条记录提取 prompt、reference 和 token IDs。
+        """从单条记录提取 prompt、reference，并通过真实 tokenizer 编码。
+
+        使用注入的 tokenizer_encode_fn 进行编码，不再是 dummy tokenization。
 
         Args:
             record: 原始 JSONL 记录。
 
         Returns:
-            dict 或 None (如果记录无效)。
+            dict 或 None（如果记录无效）。
         """
         messages = record.get("messages")
         if messages and isinstance(messages, list) and len(messages) >= 2:
-            # ChatML 格式: 取 user 作为 prompt, assistant 作为 reference
             user_text = ""
             asst_text = ""
             for msg in messages:
@@ -225,27 +250,45 @@ class Evaluator:
             if not user_text or not asst_text:
                 return None
 
-            # 将 user 文本编码为 input_ids (需要 tokenizer)
-            # 这里记录文本形式，由调用方通过 tokenizer_decode_fn 处理
+            # 构建完整 prompt（可选 chat template 包装）
+            full_prompt = self._apply_chat_template(user_text)
             return {
                 "prompt": user_text,
                 "reference": asst_text,
-                "input_ids": [ord(ch) % 100 for ch in user_text],
-                "reference_ids": [ord(ch) % 100 for ch in asst_text],
+                "input_ids": self.encode(full_prompt),
+                "reference_ids": self.encode(asst_text),
             }
 
         # 简单格式: prompt + reference
         prompt = record.get("prompt", "")
         reference = record.get("reference", "")
         if prompt and reference:
+            full_prompt = self._apply_chat_template(prompt)
             return {
                 "prompt": prompt,
                 "reference": reference,
-                "input_ids": [ord(ch) % 100 for ch in prompt],
-                "reference_ids": [ord(ch) % 100 for ch in reference],
+                "input_ids": self.encode(full_prompt),
+                "reference_ids": self.encode(reference),
             }
 
         return None
+
+    def _apply_chat_template(self, user_text: str) -> str:
+        """对用户文本应用 chat template（如果已配置）。
+
+        如果未配置 chat template（base 模型评测），返回原始文本。
+
+        Args:
+            user_text: 用户输入文本。
+
+        Returns:
+            str: 包装后的 prompt 文本。
+        """
+        if self.config.chat_template:
+            return _build_chatml_prompt(user_text)
+        return user_text
+
+    # ─── 指标计算 ────────────────────────────────────────────────────────────
 
     def _compute_metrics(
         self,
@@ -255,12 +298,9 @@ class Evaluator:
     ) -> dict[str, float]:
         """从样本列表计算 corpus-level 聚合指标。
 
-        对各样本的指标取平均值。perplexity 使用累积的
-        cross-entropy loss 计算。
-
         Args:
             samples: 评测样本列表。
-            total_loss: 累积 cross-entropy loss（来自 _generate_responses）。
+            total_loss: 累积 cross-entropy loss。
             total_tokens: 累积 token 数。
 
         Returns:
@@ -268,11 +308,12 @@ class Evaluator:
         """
         result: dict[str, float] = {}
 
+        # Perplexity（corpus-level）
         if "perplexity" in self.config.metrics and total_tokens > 0:
             avg_loss = total_loss / total_tokens
             result["perplexity"] = calc_perplexity(avg_loss)
 
-        # 对各指标取样本平均值
+        # 标准指标：逐样本平均
         for metric_name in ["bleu", "rouge_l", "char_accuracy"]:
             if metric_name not in self.config.metrics:
                 continue
@@ -281,14 +322,25 @@ class Evaluator:
             if valid:
                 result[metric_name] = sum(valid) / len(valid)
 
+        # 文言文质量评分：逐样本计算后聚合
+        if "classical_chinese_score" in self.config.metrics:
+            score_keys = ["虚词密度", "平均句长", "典故覆盖率", "总分"]
+            for key in score_keys:
+                values = [s.metrics.get(f"classical_{key}", None) for s in samples]
+                valid = [v for v in values if v is not None]
+                if valid:
+                    result[f"classical_{key}"] = sum(valid) / len(valid)
+
         return result
+
+    # ─── 工具 ────────────────────────────────────────────────────────────────
 
     def _compute_cross_entropy(
         self,
         input_ids: torch.Tensor,
         labels: torch.Tensor,
     ) -> float:
-        """计算 cross-entropy loss (用于 perplexity)。
+        """计算 cross-entropy loss（用于 perplexity）。
 
         Args:
             input_ids: (1, seq_len) 输入 token IDs。
@@ -310,7 +362,7 @@ class Evaluator:
         """收集模型元信息。
 
         Returns:
-            dict: 模型名称、参数量、设备等信息。
+            dict: 模型名称、参数量、设备、checkpoint 等信息。
         """
         total_params = sum(p.numel() for p in self.model.parameters())
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
@@ -319,4 +371,6 @@ class Evaluator:
             "total_params": total_params,
             "trainable_params": trainable_params,
             "device": str(self._device),
+            "checkpoint_name": self.config.checkpoint_name,
+            "dataset_name": self.config.dataset_name,
         }

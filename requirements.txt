@@ -1,0 +1,45 @@
+# Classic Chinese LLM 依赖清单
+# 安装: pip install -r requirements.txt
+#
+# 所有依赖按功能分组，可根据需要注释掉不需要的部分。
+
+# ============================
+# 核心依赖（模型 + 训练 + 配置）
+# ============================
+torch>=2.4.0
+datasets>=2.21.0
+accelerate>=0.34.0
+sentencepiece>=0.2.0
+tokenizers>=0.20.0
+transformers>=4.45.0
+pydantic>=2.9
+pydantic-settings>=2.5
+pyyaml>=6.0
+rich>=13.0
+tqdm>=4.66
+
+# ============================
+# 数据处理（采集 / 清洗 / 去重）
+# ============================
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.0
+datasketch>=1.6
+chardet>=5.0
+
+# ============================
+# 对话服务（Gradio UI + REST API）
+# ============================
+gradio>=5.0
+fastapi>=0.115
+uvicorn>=0.30
+sse-starlette>=2.1
+
+# ============================
+# 开发工具（格式化 / Lint / 测试）
+# ============================
+black>=24.0
+ruff>=0.7
+mypy>=1.12
+pytest>=8.0
+pytest-cov>=5.0

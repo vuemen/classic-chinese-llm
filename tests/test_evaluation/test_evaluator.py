@@ -71,6 +71,7 @@ class TestEvaluator:
         evaluator = Evaluator(
             model=model,
             generator=generator,
+            tokenizer_encode_fn=lambda text: [ord(ch) % 1000 for ch in text],
             tokenizer_decode_fn=lambda ids: "".join(chr(0x4E00 + (i % 100)) for i in ids),
             config=config,
         )
@@ -114,6 +115,7 @@ class TestEvaluator:
         evaluator = Evaluator(
             model=model,
             generator=generator,
+            tokenizer_encode_fn=lambda text: [ord(ch) % 1000 for ch in text],
             tokenizer_decode_fn=lambda ids: str(ids),
             config=config,
         )
@@ -146,6 +148,7 @@ class TestEvaluator:
         evaluator = Evaluator(
             model=model,
             generator=generator,
+            tokenizer_encode_fn=lambda text: [ord(ch) % 1000 for ch in text],
             tokenizer_decode_fn=lambda ids: "decoded",
             config=config,
         )
