@@ -68,30 +68,13 @@ class Evaluator:
         logger.info("开始评测: %s", test_data_path)
         samples_data = self._load_samples(test_data_path)
 
-        eval_samples: list[EvalSample] = []
-        total_loss = 0.0
-        total_tokens = 0
+        # 步骤 1: 批量生成回答（同时累积 perplexity 的 loss）
+        eval_samples, ppl_loss, ppl_tokens = self._generate_responses(samples_data)
 
-        for data in samples_data:
-            sample = self._evaluate_one(data)
-            eval_samples.append(sample)
+        # 步骤 2: 计算聚合指标
+        aggregate = self._compute_metrics(eval_samples, ppl_loss, ppl_tokens)
 
-            # 累积 perplexity 计算所需的 loss
-            if "perplexity" in self.config.metrics:
-                ref_ids = data.get("reference_ids", [])
-                pred_ids = data.get("prediction_ids", [])
-                if ref_ids and pred_ids:
-                    sample_loss = self._compute_cross_entropy(
-                        torch.tensor([pred_ids], device=self._device),
-                        torch.tensor([ref_ids], device=self._device),
-                    )
-                    total_loss += sample_loss * len(ref_ids)
-                    total_tokens += len(ref_ids)
-
-        # 计算聚合指标
-        aggregate = self._aggregate_metrics(eval_samples, total_loss, total_tokens)
-
-        # 构建报告
+        # 步骤 3: 构建报告
         report = EvalReport.create(
             config=self.config,
             samples=eval_samples,
@@ -109,8 +92,46 @@ class Evaluator:
 
         return report
 
-    def _evaluate_one(self, data: dict[str, Any]) -> EvalSample:
-        """评测单条样本。
+    def _generate_responses(
+        self, samples_data: list[dict[str, Any]]
+    ) -> tuple[list[EvalSample], float, int]:
+        """逐条生成模型回答并计算逐样本指标。
+
+        对每条样本: 编码 prompt → 生成 → 解码 → 计算逐样本指标。
+        同时累积 perplexity 计算所需的 cross-entropy loss。
+
+        Args:
+            samples_data: 加载后的样本字典列表。
+
+        Returns:
+            (eval_samples, total_loss, total_tokens):
+            - eval_samples: 评测样本列表
+            - total_loss: 累积 cross-entropy loss
+            - total_tokens: 累积 token 数
+        """
+        eval_samples: list[EvalSample] = []
+        total_loss = 0.0
+        total_tokens = 0
+        for data in samples_data:
+            sample = self._generate_one(data)
+            eval_samples.append(sample)
+
+            # 累积 perplexity 计算所需的 loss
+            if "perplexity" in self.config.metrics:
+                ref_ids = data.get("reference_ids", [])
+                pred_ids = data.get("prediction_ids", [])
+                if ref_ids and pred_ids:
+                    sample_loss = self._compute_cross_entropy(
+                        torch.tensor([pred_ids], device=self._device),
+                        torch.tensor([ref_ids], device=self._device),
+                    )
+                    total_loss += sample_loss * len(ref_ids)
+                    total_tokens += len(ref_ids)
+
+        return eval_samples, total_loss, total_tokens
+
+    def _generate_one(self, data: dict[str, Any]) -> EvalSample:
+        """生成单条样本。
 
         Args:
             data: 包含 prompt、reference 和 input_ids 的样本字典。
@@ -226,18 +247,21 @@ class Evaluator:
 
         return None
 
-    def _aggregate_metrics(
+    def _compute_metrics(
         self,
         samples: list[EvalSample],
-        total_loss: float,
-        total_tokens: int,
+        total_loss: float = 0.0,
+        total_tokens: int = 0,
     ) -> dict[str, float]:
-        """聚合样本级别指标为 corpus-level 指标。
+        """从样本列表计算 corpus-level 聚合指标。
+
+        对各样本的指标取平均值。perplexity 使用累积的
+        cross-entropy loss 计算。
 
         Args:
             samples: 评测样本列表。
-            total_loss: 累积 cross-entropy loss。
-            total_tokens: 总 token 数。
+            total_loss: 累积 cross-entropy loss（来自 _generate_responses）。
+            total_tokens: 累积 token 数。
 
         Returns:
             dict[str, float]: 聚合后的指标值。
@@ -248,7 +272,7 @@ class Evaluator:
             avg_loss = total_loss / total_tokens
             result["perplexity"] = calc_perplexity(avg_loss)
 
-        # 对各指标取平均
+        # 对各指标取样本平均值
         for metric_name in ["bleu", "rouge_l", "char_accuracy"]:
             if metric_name not in self.config.metrics:
                 continue

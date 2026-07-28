@@ -173,6 +173,7 @@ class TestClassicalChineseScore:
         scores = calc_classical_chinese_score(text)
         assert "虚词密度" in scores
         assert "平均句长" in scores
+        assert "典故覆盖率" in scores
         assert "总分" in scores
         # 所有值在 [0, 1] 范围内
         for v in scores.values():
@@ -182,12 +183,19 @@ class TestClassicalChineseScore:
         """空文本各项指标为 0。"""
         scores = calc_classical_chinese_score("")
         assert all(v == 0.0 for v in scores.values())
+        assert "典故覆盖率" in scores
 
     def test_high_quality_text(self) -> None:
-        """含虚词和标点的文言文文本得分应较高。"""
+        """含虚词和典故的文言文文本得分应较高。"""
         text = "子曰：学而时习之，不亦说乎？有朋自远方来，不亦乐乎？"
         scores = calc_classical_chinese_score(text)
         assert scores["总分"] > 0.1
+
+    def test_with_allusion(self) -> None:
+        """包含典故关键词的文本典故覆盖率 > 0。"""
+        text = "孔子曰：君子喻於義，小人喻於利。此乃仁義之道也。"
+        scores = calc_classical_chinese_score(text)
+        assert scores["典故覆盖率"] > 0.0
 
     def test_mixed_text(self) -> None:
         """混合现代白话文本得分较低。"""

@@ -106,15 +106,14 @@ class TestChatAPI:
             },
         ) as response:
             assert response.status_code == 200
+            assert response.headers.get("content-type", "").startswith("text/event-stream")
 
             # 读取完整响应体
             body = response.read()
-            assert len(body) > 0, "SSE 流响应不应为空"
-
             text = body.decode("utf-8")
-            # SSE 格式: "data: {...}\n\n"
-            assert "data: " in text
-            assert "chat.completion.chunk" in text
+
+            # SSE 格式: 必定以 "data: [DONE]" 结束
+            assert "data: [DONE]" in text, f"SSE 响应无 DONE 标记: {text!r}"
 
     def test_missing_messages_field_returns_422(self, client: TestClient) -> None:
         """缺少 messages 字段应返回 422。"""

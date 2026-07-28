@@ -200,24 +200,36 @@ _FUNCTION_WORDS = set(
     "乎哉而已云爾者所諸兮噫嘻夫惟"
 )
 
+# 常见文言典故关键词（人物、典籍、成语）
+_CLASSICAL_ALLUSIONS = set(
+    "堯舜禹湯文武周公孔子孟子老子莊子墨子韓非孫子"
+    "詩經尚書周易禮記春秋左傳史記漢書三國志"
+    "臥薪嘗膽破釜沉舟草船借箭三顧茅廬負荊請罪"
+    "桃花源岳陽樓滕王閣赤壁賦"
+    "仁義禮智信忠孝節義"
+    "天下社稷蒼生君子小人"
+)
+
 
 def calc_classical_chinese_score(prediction: str) -> dict[str, float]:
     """文言文质量专用评分。
 
-    检查三个方面:
+    检查四个方面:
     1. 虚词密度: 虚词使用频率（适中为佳）
     2. 平均句长: 文言文宜简短（理想 4-8 字/句）
-    3. 总分: 综合加权
+    3. 典故覆盖率: 使用典故/典籍关键词的频率
+    4. 总分: 综合加权
 
     Args:
         prediction: 待评分的文言文文本。
 
     Returns:
-        dict: {"虚词密度": float, "平均句长": float, "总分": float}
+        dict: {"虚词密度": float, "平均句长": float,
+               "典故覆盖率": float, "总分": float}
               每个值在 0.0 ~ 1.0 之间。
     """
     if len(prediction) == 0:
-        return {"虚词密度": 0.0, "平均句长": 0.0, "总分": 0.0}
+        return {"虚词密度": 0.0, "平均句长": 0.0, "典故覆盖率": 0.0, "总分": 0.0}
 
     # 虚词密度
     func_word_count = sum(1 for ch in prediction if ch in _FUNCTION_WORDS)
@@ -235,12 +247,21 @@ def calc_classical_chinese_score(prediction: str) -> dict[str, float]:
     else:
         len_score = 0.0
 
-    # 总分加权
-    total_score = 0.5 * func_score + 0.5 * len_score
+    # 典故覆盖率: 检查是否引用典故关键词
+    allusion_count = 0
+    for allusion in _CLASSICAL_ALLUSIONS:
+        if allusion in prediction:
+            allusion_count += 1
+    # 理想典故数为 1-5 个
+    allusion_score = _range_score(float(allusion_count), ideal_min=1.0, ideal_max=5.0)
+
+    # 总分加权: 虚词 0.35 + 句长 0.30 + 典故 0.35
+    total_score = 0.35 * func_score + 0.30 * len_score + 0.35 * allusion_score
 
     return {
         "虚词密度": round(func_score, 4),
         "平均句长": round(len_score, 4),
+        "典故覆盖率": round(allusion_score, 4),
         "总分": round(total_score, 4),
     }
 
