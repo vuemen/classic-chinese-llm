@@ -86,6 +86,9 @@ select = [
 ]
 ignore = [
     "E501",
+    "N812",     # torch.nn.functional as F is PyTorch convention
+    "B024",     # ABC with no abstract methods for callback pattern
+    "B027",     # Empty methods in ABC for optional hook override
 ]
 
 [tool.ruff.lint.isort]
@@ -111,6 +114,21 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "transformers"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tqdm"
+ignore_missing_imports = true
+
+# PyTorch stubs do not have complete type annotations for some APIs
+[[tool.mypy.overrides]]
+module = [
+    "classic_chinese_llm.model.layers",
+    "classic_chinese_llm.model.transformer",
+    "classic_chinese_llm.model.generation",
+    "classic_chinese_llm.training.trainer",
+    "classic_chinese_llm.training.datasets",
+]
+warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
