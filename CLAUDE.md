@@ -17,7 +17,7 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture desig
 
 ```bash
 # Install (create a Python 3.12 venv/conda env first)
-pip install -e ".[data,chat,dev]"
+pip install -r requirements.txt
 
 # Code quality (required before commits)
 black src/ tests/

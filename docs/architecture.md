@@ -16,6 +16,8 @@
 - **单卡可训练**：参数规模和训练配置针对消费级 GPU（12GB VRAM）优化
 - **数据规模现实**：文言文可用语料总量约 3-6 亿字符（2-4 亿 token），在此约束下设计模型规模
 
+> 📖 使用指南请见 [guide.md](guide.md)，各模块详细设计见 [design/](design/) 目录。
+
 ---
 
 ## 2. 架构全景图
@@ -74,6 +76,8 @@
 | 设备检测 | GPU 可用性检测、显存报告、混合精度兼容性检查 |
 | Checkpoint | 模型权重 + 优化器状态 + 训练元信息的保存与恢复 |
 
+> 📖 详细设计：[01-project-infrastructure](design/01-project-infrastructure.md)、[02-config-system](design/02-config-system.md)、[03-utils-module](design/03-utils-module.md)
+
 ### 3.2 数据层
 
 **职责**：文言文语料的采集、清洗、去重，以及预训练/指令微调数据集的构建。
@@ -103,6 +107,8 @@
 
 每个数据源通过实现统一适配器接口接入，新增来源不影响现有流程。
 
+> 📖 详细设计：[04-data-collector](design/04-data-collector.md)、[05-data-cleaner](design/05-data-cleaner.md)、[06-data-deduplicator](design/06-data-deduplicator.md)、[07-data-formatter](design/07-data-formatter.md)
+
 ### 3.3 Tokenizer 层
 
 **职责**：为文言文训练专用的子词分词器。
@@ -113,6 +119,8 @@
 - `character_coverage = 0.99995`，覆盖几乎全部文言字符
 - `byte_fallback = True`，零 OOV 保证
 - 训练后通过 HF `tokenizers` 封装为标准 `PreTrainedTokenizerFast`，与 `datasets` 库无缝互操作
+
+> 📖 详细设计：[08-tokenizer](design/08-tokenizer.md)
 
 **模块结构**：
 
@@ -153,6 +161,8 @@
 
 **生成模块**：独立的 `Generator` 类，支持 Greedy / Temperature / Top-K / Top-P / Repetition Penalty / Beam Search，以及逐 token 流式输出。
 
+> 📖 详细设计：[09-model](design/09-model.md) — 包含完整架构图、方案选型对比（RoPE vs Learned、SwiGLU vs ReLU、Pre-norm vs Post-norm 等）、参数量逐项计算、显存估算
+
 ### 3.5 训练层
 
 **职责**：提供通用训练框架及预训练/指令微调两个阶段的训练逻辑。
@@ -176,6 +186,8 @@
 
 **12GB VRAM 可行性**：混合精度训练中每参数占用 16 bytes（BF16 权重 2B + BF16 梯度 2B + FP32 Master Weight 4B + Adam m 4B + Adam v 4B），157M 参数合计约 2.5GB，加上激活值和 CUDA 开销共约 8-9GB，在 12GB 范围内安全运行。
 
+> 📖 详细设计：[10-training](design/10-training.md) — 包含 Trainer 设计、预训练/SFT 流程、回调系统、Data Collator、显存预算分析
+
 ### 3.6 推理服务层
 
 **职责**：将训练好的模型加载并提供统一的生成接口。
@@ -185,6 +197,8 @@
 | Inference Engine | 加载 checkpoint → 实例化模型 → 提供 `generate()` 和 `stream()` 接口 |
 
 该层屏蔽了底层模型实现细节，上层对话界面只与 Inference Engine 交互。
+
+> 📖 详细设计：[12-inference](design/12-inference.md)
 
 ### 3.7 对话界面层
 
@@ -196,6 +210,21 @@
 | REST API | FastAPI | `POST /v1/chat/completions`，OpenAI 兼容格式，支持 SSE 流式响应 |
 | 对话管理 | 内存存储 | 多轮对话历史维护，自动截断超出上下文限制的历史消息 |
 | 系统提示词 | 模板集合 | 预设角色：古文专家、诗词创作、历史讲述、文言翻译 |
+
+> 📖 详细设计：[13-chat](design/13-chat.md)
+
+### 3.8 评估与评测层
+
+**职责**：评估模型在文言文任务上的表现。
+
+| 组件 | 职责 |
+|------|------|
+| Perplexity | 在 held-out 测试集上计算困惑度 |
+| NLG 指标 | BLEU-4、ROUGE-L、字符级准确率 |
+| LLM-as-Judge | 使用评估准则对生成结果进行质量打分 |
+| 评测报告 | 结构化评测报告（控制台 + JSON） |
+
+> 📖 详细设计：[11-evaluation](design/11-evaluation.md)
 
 ---
 
@@ -273,8 +302,21 @@ classic-chinese-llm/
 │
 ├── docs/
 │   ├── architecture.md             # 本文档
-│   ├── data_sources.md             # 数据源详细说明
-│   └── training_guide.md           # 训练指南
+│   ├── guide.md                    # 场景使用指南
+│   └── design/                     # 模块详细设计文档（共 13 份）
+│       ├── 01-project-infrastructure.md
+│       ├── 02-config-system.md
+│       ├── 03-utils-module.md
+│       ├── 04-data-collector.md
+│       ├── 05-data-cleaner.md
+│       ├── 06-data-deduplicator.md
+│       ├── 07-data-formatter.md
+│       ├── 08-tokenizer.md
+│       ├── 09-model.md
+│       ├── 10-training.md
+│       ├── 11-evaluation.md
+│       ├── 12-inference.md
+│       └── 13-chat.md
 │
 ├── configs/
 │   ├── default.yaml

@@ -16,6 +16,7 @@
 - [场景七：我只想训练或评估 Tokenizer](#场景七我只想训练或评估-tokenizer)
 - [参考：配置项速查](#参考配置项速查)
 - [参考：常见问题](#参考常见问题)
+- [参考：深入阅读](#参考深入阅读)
 
 ---
 
@@ -650,4 +651,15 @@ python scripts/pretrain.py --config configs/pretrain.yaml --data-path data/my_co
 
 ---
 
-> **更多技术细节**请参阅 [docs/architecture.md](architecture.md)。
+## 参考：深入阅读
+
+| 文档 | 说明 |
+|------|------|
+| [架构设计文档](architecture.md) | 项目整体架构、分层定义、技术栈、模型规模与数据约束 |
+| [模型层设计](design/09-model.md) | 完整架构图、方案选型对比（RoPE/SwiGLU/Pre-norm）、参数量逐项计算、显存估算 |
+| [Tokenizer 设计](design/08-tokenizer.md) | Unigram 算法选择、预分词规则、HF 封装、byte_fallback 机制 |
+| [训练层设计](design/10-training.md) | Trainer 框架、预训练/SFT 流程、回调系统、显存预算分析 |
+| [推理引擎设计](design/12-inference.md) | 模型加载、流式生成、KV Cache |
+| [对话界面设计](design/13-chat.md) | Gradio UI、FastAPI、对话管理、OpenAI 兼容 API |
+| [评估模块设计](design/11-evaluation.md) | Perplexity、NLG 指标、LLM-as-Judge、评测报告 |
+| [全部设计文档](design/) | 共 13 份模块详细设计文档 |

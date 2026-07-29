@@ -59,7 +59,7 @@
 
 核心架构选择：**RoPE** 位置编码、**SwiGLU** 激活函数、**RMSNorm** 归一化、**Pre-norm** 残差连接、**FlashAttention**（通过 `F.scaled_dot_product_attention`）。
 
-详细设计见 [docs/architecture.md](docs/architecture.md)。
+详细设计见 [架构设计文档](docs/architecture.md)，各模块的深入设计见 [docs/design/](docs/design/) 目录。
 
 ## 环境配置
 
@@ -84,7 +84,7 @@ conda activate classic-llm
 #    前往 https://pytorch.org/get-started/locally/ 查看适合你的安装命令
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-# 3. 安装项目依赖（一步完成，包含数据处理、对话服务、开发工具等全部依赖）
+# 3. 安装项目依赖（包含数据处理、对话服务、开发工具等全部依赖）
 pip install -r requirements.txt
 
 # 4. 验证安装
@@ -196,15 +196,23 @@ classic-chinese-llm/
 │   ├── collect_data.py
 │   ├── train_tokenizer.py
 │   ├── pretrain.py
-│   └── finetune.py
+│   ├── finetune.py
+│   ├── evaluate.py
+│   ├── chat.py
+│   └── serve.py
 │
 ├── tests/                           # 测试（与 src/ 结构一致）
 ├── docs/                            # 文档
 │   ├── architecture.md              #   架构设计文档
-│   └── guide.md                     #   场景使用指南
+│   ├── guide.md                     #   场景使用指南
+│   └── design/                      #   模块详细设计文档
+│       ├── 09-model.md              #     模型层设计
+│       ├── 08-tokenizer.md          #     Tokenizer 设计
+│       ├── 10-training.md           #     训练层设计
+│       └── ...                      #     等共 13 份设计文档
 │
-├── requirements.txt                 # 依赖清单（pip install -r requirements.txt）
-├── pyproject.toml                   # 项目元数据
+├── requirements.txt                 # 依赖快照（由 pyproject.toml 导出）
+├── pyproject.toml                   # 项目元数据 + 依赖权威定义
 └── CLAUDE.md                        # Claude Code 开发指引
 ```
 
