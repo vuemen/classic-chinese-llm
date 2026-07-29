@@ -161,7 +161,8 @@ classic-chinese-llm/
 ├── configs/                         # YAML 配置文件
 │   ├── default.yaml                 #   基础默认配置
 │   ├── pretrain.yaml                #   预训练配置
-│   └── sft.yaml                     #   指令微调配置
+│   ├── sft.yaml                     #   指令微调配置
+│   └── eval.yaml                    #   评测配置
 │
 ├── src/classic_chinese_llm/
 │   ├── config/                      # Pydantic 配置系统 + 路径管理

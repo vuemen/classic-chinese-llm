@@ -321,7 +321,8 @@ classic-chinese-llm/
 ├── configs/
 │   ├── default.yaml
 │   ├── pretrain.yaml
-│   └── sft.yaml
+│   ├── sft.yaml
+│   └── eval.yaml
 │
 ├── src/
 │   └── classic_chinese_llm/
@@ -348,10 +349,15 @@ classic-chinese-llm/
 │
 └── tests/                          # 与 src/ 结构一致
     ├── conftest.py
+    ├── test_chat/
+    ├── test_config/
     ├── test_data/
-    ├── test_tokenizer/
+    ├── test_evaluation/
+    ├── test_inference/
     ├── test_model/
-    └── test_training/
+    ├── test_tokenizer/
+    ├── test_training/
+    └── test_utils/
 ```
 
 ---
