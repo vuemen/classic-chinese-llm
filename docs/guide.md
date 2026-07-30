@@ -62,7 +62,36 @@ pip install -r requirements.txt
 
 `requirements.txt` 中已按功能分组并标注版本号。如果你不需要某组依赖（比如不做数据采集），可以编辑该文件注释掉对应部分。
 
-### 5. 验证
+### 5. 注册项目模块
+
+本项目使用 `src` 布局，`classic_chinese_llm` 包位于 `src/` 下，需要让 Python 能找到它。**任选以下一种方式**：
+
+**方式一：可编辑安装（推荐，一次配置永久生效）**
+
+```bash
+pip install -e .
+```
+
+之后可以直接运行脚本，无需额外配置。
+
+**方式二：设置 `PYTHONPATH`（免安装，每次打开终端需重新设置）**
+
+```bash
+# Linux / macOS / Git Bash（在项目根目录下执行）
+export PYTHONPATH="$(pwd)/src"
+
+# Windows PowerShell（在项目根目录下执行）
+$env:PYTHONPATH = "$(Get-Location)\src"
+```
+
+也可以在运行命令时临时指定：
+
+```bash
+PYTHONPATH="$(pwd)/src" python scripts/collect_data.py --raw-dir data/raw       # Linux / Git Bash
+$env:PYTHONPATH="$(Get-Location)\src"; python scripts/collect_data.py --raw-dir data/raw  # PowerShell
+```
+
+### 6. 验证
 
 ```bash
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
@@ -114,7 +143,7 @@ python -c "import classic_chinese_llm; print('✅ 核心模块加载成功')"
 ### 第一步：采集文言文语料
 
 ```bash
-python scripts/collect_data.py --output-dir data/raw
+python scripts/collect_data.py --raw-dir data/raw
 ```
 
 这一步会从多个数据源（殆知阁、WikiSource、GitHub 开源语料、四库全书、ctext.org）下载原始文言文文本，输出到 `data/raw/`。
@@ -480,7 +509,7 @@ CCLLM_TRAINING__MAX_STEPS=50 \
 ### 仅采集原始数据
 
 ```bash
-python scripts/collect_data.py --output-dir data/raw
+python scripts/collect_data.py --raw-dir data/raw
 ```
 
 ### 分步执行（高级）

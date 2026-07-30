@@ -87,7 +87,14 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 # 3. 安装项目依赖（包含数据处理、对话服务、开发工具等全部依赖）
 pip install -r requirements.txt
 
-# 4. 验证安装
+# 4. 注册项目模块（本项目使用 src 布局，二选一）
+#    方式 A：可编辑安装（推荐，一次配置永久生效）
+pip install -e .
+#    方式 B：设置 PYTHONPATH（免安装，每次打开终端需重新设置）
+#    Linux/macOS: export PYTHONPATH="$(pwd)/src"
+#    Windows PowerShell: $env:PYTHONPATH = "$(Get-Location)\src"
+
+# 5. 验证安装
 python -c "import torch; print(f'PyTorch {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
 python -c "from classic_chinese_llm import __version__; print(f'classic_chinese_llm {__version__} 加载成功')"
 ```
@@ -131,7 +138,7 @@ export CUDA_VISIBLE_DEVICES=0
 conda activate classic-llm
 
 # 第一步：采集并处理文言文语料
-python scripts/collect_data.py --output-dir data/raw
+python scripts/collect_data.py --raw-dir data/raw
 
 # 第二步：训练 SentencePiece Unigram 分词器
 python scripts/train_tokenizer.py --corpus data/processed/cleaned.txt --vocab-size 32000

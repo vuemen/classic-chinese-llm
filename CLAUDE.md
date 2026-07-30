@@ -18,6 +18,7 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture desig
 ```bash
 # Install (create a Python 3.12 venv/conda env first)
 pip install -r requirements.txt
+pip install -e .
 
 # Code quality (required before commits)
 black src/ tests/
@@ -31,7 +32,7 @@ pytest tests/ -v
 pytest tests/test_model/test_layers.py -v
 
 # Data pipeline
-python scripts/collect_data.py --output-dir data/raw
+python scripts/collect_data.py --raw-dir data/raw
 python scripts/train_tokenizer.py --corpus data/processed/cleaned.txt --vocab-size 32000
 
 # Training
