@@ -140,15 +140,94 @@ python -c "import classic_chinese_llm; print('✅ 核心模块加载成功')"
 >
 > **典型跨机器协作流程**：在 CPU 机器上完成数据采集→清洗→去重→Tokenizer 训练，将 `data/processed/` 和 `models/tokenizer/` 拷贝到 GPU 机器上做预训练和 SFT，最后将 checkpoint 拷回任意机器做推理部署。
 
-### 第一步：采集文言文语料
+### 前置准备：下载原始语料
+
+**`collect_data.py` 不会自动下载数据**，它只扫描本地已有文件进行解析。你需要先将原始文件放到 `data/raw/<source>/` 下。
+
+#### 数据源下载指南
+
+**殆知阁**（主力语料，~20 亿字，必下）：
+
+```bash
+# 方式 A：Git 克隆（推荐）
+git clone --branch data --depth 1 https://github.com/frankslin/daizhigev20.git data/raw/daizhige
+
+# 方式 B：GitHub ZIP
+# 打开 https://github.com/garychowcmu/daizhigev20 → Code → Download ZIP → 解压到 data/raw/daizhige/
+
+# 备选镜像（内容相同）：
+# https://github.com/Will-learning-nlp/daizhigev20
+# https://github.com/mrsunx/daizhigev20
+```
+
+> 殆知阁收录约 16,000 种古籍、20 万卷，涵盖经/史/子/集/诗/艺/易/医/佛/道十大类，格式为 `.txt`。
+
+**WikiSource 中文**（维基文库 XML dump）：
+
+```bash
+# 下载最新 pages-articles dump
+# 地址：https://dumps.wikimedia.org/zhwikisource/latest/
+# 找到 zhwikisource-<日期>-pages-articles.xml.bz2 下载
+# 放到 data/raw/wikisource/ 下（无需解压，适配器自动处理）
+```
+
+> `.xml.bz2` 文件通常几百 MB，`lxml.iterparse` 流式解析，内存友好。
+
+**GitHub 开源语料**（可选扩展）：
+
+| 项目 | 格式 | 说明 |
+|------|------|------|
+| [NiuTrans/Classical-Modern](https://github.com/NiuTrans/Classical-Modern) | `.txt` | 327 本书、97 万文言-白话平行句对 |
+| [HistoryTrans/Dataset](https://huggingface.co/datasets/HistoryTrans/Dataset) | `.jsonl` | 二十四史+清史稿翻译数据 |
+
+```bash
+git clone --depth 1 https://github.com/NiuTrans/Classical-Modern.git data/raw/github/NiuTrans
+```
+
+**四库全书**（可选，公共领域子集）：
+
+```bash
+# Project Gutenberg 上的文渊阁四库全书（免费、公共领域）
+git clone --depth 1 https://github.com/GITenberg/-------_7221.git data/raw/siku/gutenberg
+```
+
+> ⚠️ Project Gutenberg 版仅覆盖部分内容。更完整的四库全书电子版获取较困难，大部分为付费资源或高校馆内使用。适配器按"经/史/子/集"目录结构推断体裁——如果你有更多内容，按目录归类放置即可。
+
+**ctext.org**（可选，高质量补充）：
+
+1. 注册 [ctext.org](https://ctext.org/zh) 免费账户
+2. 登录后安装"全文输出"插件
+3. 逐章手动下载需要的典籍 TXT，放到 `data/raw/ctext/`
+
+> ⚠️ ctext.org **禁止自动批量抓取**，违者会被封锁。精选几本最重要的经典（如《论语》《孟子》《庄子》《史记》）即可。
+
+#### 优先级建议
+
+```
+殆知阁 > WikiSource > GitHub语料 > 四库全书 > ctext
+  必下      推荐        可选        可选     精选几本
+```
+
+只需下载殆知阁即可跑通全流程，其他数据源逐步补充。
+
+#### 目录结构要求
+
+```
+data/raw/
+├── daizhige/       # .txt 文件（可含子目录）
+├── wikisource/     # .xml 或 .xml.bz2
+├── github/         # .txt 或 .jsonl（按项目建子目录）
+├── siku/           # .txt 文件（建议按 经/史/子/集 建子目录）
+└── ctext/          # .txt 文件
+```
+
+### 第一步：采集并处理文言文语料
 
 ```bash
 python scripts/collect_data.py --raw-dir data/raw
 ```
 
-这一步会从多个数据源（殆知阁、WikiSource、GitHub 开源语料、四库全书、ctext.org）下载原始文言文文本，输出到 `data/raw/`。
-
-数据采集完成后，脚本会自动执行清洗（Unicode 规范化、现代标点剥离、版式噪声去除、长度过滤）和去重（SHA-256 精确去重 + MinHash LSH 近似去重），最终在 `data/processed/` 下生成清洗后的数据：
+这一步会扫描 `data/raw/` 下的原始文件，经过采集（解析→校验）、清洗（Unicode 规范化、现代标点剥离、版式噪声去除、长度过滤）、去重（SHA-256 精确去重 + MinHash LSH 近似去重）三个阶段，最终在 `data/processed/` 下生成处理后的数据：
 
 ```
 data/processed/
@@ -506,7 +585,9 @@ CCLLM_TRAINING__MAX_STEPS=50 \
 
 **适用人群**：只需要采集、清洗文言文数据，不打算训练模型；或者想为自己的项目准备训练数据。
 
-### 仅采集原始数据
+> ⚠️ **前置条件**：原始语料需手动下载到 `data/raw/<source>/` 下，详见[前置准备：下载原始语料](#前置准备下载原始语料)。脚本不会自动下载数据。
+
+### 完整流程一键运行
 
 ```bash
 python scripts/collect_data.py --raw-dir data/raw

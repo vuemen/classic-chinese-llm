@@ -8,6 +8,20 @@
 
 ## 1. 需求概述
 
+### 1.0 数据获取说明
+
+**Collector 不负责下载原始数据。** 本项目收集文言文语料，但各数据源的原始文件（txt、xml、jsonl 等）需用户手动下载到 `data/raw/<source_name>/` 目录下。脚本只做本地扫描→解析→校验。
+
+| 数据源 | 获取方式 | 优先级 |
+|--------|---------|:---:|
+| 殆知阁 | `git clone --branch data --depth 1 https://github.com/frankslin/daizhigev20.git data/raw/daizhige` | 必下 |
+| WikiSource | [dumps.wikimedia.org/zhwikisource/latest](https://dumps.wikimedia.org/zhwikisource/latest/) → `pages-articles.xml.bz2` | 推荐 |
+| GitHub 语料 | 如 [NiuTrans/Classical-Modern](https://github.com/NiuTrans/Classical-Modern) 等开源项目 | 可选 |
+| 四库全书 | [Project Gutenberg #7221](https://www.gutenberg.org/ebooks/7221) 公共领域子集 | 可选 |
+| ctext.org | [ctext.org](https://ctext.org/zh) 注册后手动逐章下载 | 精选几本 |
+
+详细下载指南见 [docs/guide.md](../guide.md#前置准备下载原始语料)。
+
 ### 1.1 功能需求
 
 | 编号 | 需求 | 说明 |

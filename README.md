@@ -131,7 +131,21 @@ export CUDA_VISIBLE_DEVICES=0
 
 ## 快速开始
 
-完整流程共五步：采集数据 → 训练分词器 → 预训练 → 指令微调 → 对话。
+完整流程共五步：准备语料 → 采集处理 → 训练分词器 → 预训练 → 指令微调 → 对话。
+
+### 第零步：下载原始语料（手动）
+
+`collect_data.py` **不会自动下载数据**——你需要先将原始文件放到 `data/raw/<source>/` 下。建议优先下载殆知阁（占数据量 80%+），其他按需补充。
+
+| 数据源 | 目录 | 获取方式 |
+|--------|------|---------|
+| **殆知阁** ⭐ | `data/raw/daizhige/` | `git clone --branch data --depth 1 https://github.com/frankslin/daizhigev20.git data/raw/daizhige` |
+| WikiSource | `data/raw/wikisource/` | [dumps.wikimedia.org/zhwikisource/latest](https://dumps.wikimedia.org/zhwikisource/latest/) → 下载 `pages-articles.xml.bz2` |
+| GitHub 语料 | `data/raw/github/` | 如 [NiuTrans/Classical-Modern](https://github.com/NiuTrans/Classical-Modern)（文言-白话平行语料，可选） |
+| 四库全书 | `data/raw/siku/` | [Project Gutenberg #7221](https://www.gutenberg.org/ebooks/7221)（公共领域子集，可选） |
+| ctext.org | `data/raw/ctext/` | [ctext.org](https://ctext.org/zh) 注册后逐章手动下载（质量最高，精选几本即可） |
+
+> 详细下载指南与备选镜像见 [docs/guide.md](docs/guide.md#前置准备下载原始语料)。
 
 ```bash
 # 确保已激活 conda 环境
