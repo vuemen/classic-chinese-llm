@@ -27,7 +27,7 @@
 ### 1. 克隆项目
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/vuemen/classic-chinese-llm.git
 cd classic-chinese-llm
 ```
 
@@ -90,6 +90,26 @@ python -c "import classic_chinese_llm; print('✅ 核心模块加载成功')"
                                  ▼
 [指令数据集] → [指令微调 (SFT)] → [对话 / API 服务]
 ```
+
+#### 各阶段中间产物与跨机器可移植性
+
+| 阶段 | 中间产物 | 格式 | 可跨机器 | 说明 |
+|------|---------|------|:---:|------|
+| 数据采集 | `data/raw/*.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
+| 数据清洗 | `data/processed/cleaned.txt` | 纯文本 (UTF-8) | ✅ | 纯文本，任意 OS 通用 |
+| 数据去重 | `data/processed/deduplicated.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
+| 指令数据集 | `data/processed/instructions/*.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
+| Tokenizer 训练 | `models/tokenizer/classical_chinese.model` | SentencePiece 二进制 | ✅ | protobuf 格式，跨平台通用 |
+| 预训练 | `models/checkpoints/checkpoint_*.pt` | PyTorch state_dict | ⚠️ | 见下方说明 |
+| 指令微调 (SFT) | `models/checkpoints/sft_best.pt` | PyTorch state_dict | ⚠️ | 见下方说明 |
+
+> **⚠️ Checkpoint 跨机器使用须知：**
+> - **CPU ↔ GPU**：在 GPU 上保存的 checkpoint 可以通过 `map_location='cpu'` 在 CPU 机器上加载，反之亦可
+> - **架构匹配**：checkpoint 与模型配置（`d_model`、`n_layers`、`n_heads` 等）强绑定，加载时必须使用相同的模型配置
+> - **PyTorch 版本**：`torch.save`/`torch.load` 向前兼容性良好（2.x 可加载 1.x），跨小版本通常无问题
+> - **操作系统**：`.pt` 文件跨 Windows / Linux / macOS 通用
+>
+> **典型跨机器协作流程**：在 CPU 机器上完成数据采集→清洗→去重→Tokenizer 训练，将 `data/processed/` 和 `models/tokenizer/` 拷贝到 GPU 机器上做预训练和 SFT，最后将 checkpoint 拷回任意机器做推理部署。
 
 ### 第一步：采集文言文语料
 
