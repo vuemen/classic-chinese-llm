@@ -139,7 +139,7 @@ export CUDA_VISIBLE_DEVICES=0
 
 | 数据源 | 目录 | 获取方式 |
 |--------|------|---------|
-| **殆知阁** ⭐ | `data/raw/daizhige/` | `git clone --branch data --depth 1 https://github.com/frankslin/daizhigev20.git data/raw/daizhige` |
+| **殆知阁** ⭐ | `data/raw/daizhige/` | `git clone --depth 1 https://github.com/garychowcmu/daizhigev20.git data/raw/daizhige` |
 | WikiSource | `data/raw/wikisource/` | [dumps.wikimedia.org/zhwikisource/latest](https://dumps.wikimedia.org/zhwikisource/latest/) → 下载 `pages-articles.xml.bz2` |
 | GitHub 语料 | `data/raw/github/` | 如 [NiuTrans/Classical-Modern](https://github.com/NiuTrans/Classical-Modern)（文言-白话平行语料，可选） |
 | 四库全书 | `data/raw/siku/` | [Project Gutenberg #7221](https://www.gutenberg.org/ebooks/7221)（公共领域子集，可选） |

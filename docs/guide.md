@@ -150,7 +150,7 @@ python -c "import classic_chinese_llm; print('✅ 核心模块加载成功')"
 
 ```bash
 # 方式 A：Git 克隆（推荐）
-git clone --branch data --depth 1 https://github.com/frankslin/daizhigev20.git data/raw/daizhige
+git clone --depth 1 https://github.com/garychowcmu/daizhigev20.git data/raw/daizhige
 
 # 方式 B：GitHub ZIP
 # 打开 https://github.com/garychowcmu/daizhigev20 → Code → Download ZIP → 解压到 data/raw/daizhige/
