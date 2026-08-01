@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> None:
     paths = PathConfig.get()
 
     # 2. 初始化日志
-    setup_logging(level="INFO")
+    setup_logging(level="INFO", log_file=str(paths.logs_dir / "chat.log"))
     logger.info("=== 文言文 LLM 对话 ===")
 
     # 3. 加载 tokenizer

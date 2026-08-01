@@ -100,7 +100,8 @@ def main() -> None:
     args = parser.parse_args()
 
     PathConfig.initialize(project_root=".")
-    setup_logging(level="INFO")
+    paths = PathConfig.get()
+    setup_logging(level="INFO", log_file=str(paths.logs_dir / "collect_data.log"))
 
     raw_dir = Path(args.raw_dir)
     output_dir = Path(args.output_dir)

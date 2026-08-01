@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> None:
     paths = PathConfig.get()
 
     # 2. 初始化日志
-    setup_logging(level="INFO")
+    setup_logging(level="INFO", log_file=str(paths.logs_dir / "serve.log"))
     logger.info("=== 文言文 LLM API 服务 ===")
 
     # 3. 加载 tokenizer

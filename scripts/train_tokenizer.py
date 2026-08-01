@@ -68,12 +68,12 @@ def main(argv: list[str] | None = None) -> None:
     """CLI 主入口。"""
     args = parse_args(argv)
 
-    setup_logging(level="INFO")
-    logger = logging.getLogger(__name__)
-
     # 初始化路径
     project_root = Path(__file__).resolve().parent.parent
     PathConfig.initialize(project_root)
+    paths = PathConfig.get()
+    setup_logging(level="INFO", log_file=str(paths.logs_dir / "train_tokenizer.log"))
+    logger = logging.getLogger(__name__)
 
     # 构建配置
     config = TokenizerConfig(
