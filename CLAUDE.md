@@ -33,7 +33,7 @@ pytest tests/test_model/test_layers.py -v
 
 # Data pipeline
 python scripts/collect_data.py --raw-dir data/raw
-python scripts/train_tokenizer.py --corpus data/processed/cleaned.txt --vocab-size 32000
+python scripts/train_tokenizer.py --corpus data/processed/deduplicated.jsonl --vocab-size 32000
 
 # Training
 python scripts/pretrain.py --config configs/pretrain.yaml    # ~2-3 days

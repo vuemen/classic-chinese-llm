@@ -124,8 +124,8 @@ python -c "import classic_chinese_llm; print('✅ 核心模块加载成功')"
 
 | 阶段 | 中间产物 | 格式 | 可跨机器 | 说明 |
 |------|---------|------|:---:|------|
-| 数据采集 | `data/raw/*.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
-| 数据清洗 | `data/processed/cleaned.txt` | 纯文本 (UTF-8) | ✅ | 纯文本，任意 OS 通用 |
+| 数据采集 | `data/processed/collected.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
+| 数据清洗 | `data/processed/cleaned.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
 | 数据去重 | `data/processed/deduplicated.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
 | 指令数据集 | `data/processed/instructions/*.jsonl` | JSONL 文本 | ✅ | 纯文本，任意 OS 通用 |
 | Tokenizer 训练 | `models/tokenizer/classical_chinese.model` | SentencePiece 二进制 | ✅ | protobuf 格式，跨平台通用 |
@@ -231,8 +231,9 @@ python scripts/collect_data.py --raw-dir data/raw
 
 ```
 data/processed/
-├── cleaned.txt          # 清洗后的纯文本（用于 Tokenizer 训练）
-├── deduplicated.jsonl   # 去重后的 JSONL（用于预训练）
+├── collected.jsonl      # 采集汇总（中间产物，含所有数据源的原始文档）
+├── cleaned.jsonl        # 清洗后（Unicode 规范化、去噪、长度过滤）
+├── deduplicated.jsonl   # 去重后（用于 Tokenizer 训练 & 预训练）
 └── instructions/        # 指令数据集（用于 SFT）
     ├── train.jsonl
     └── val.jsonl
@@ -241,8 +242,10 @@ data/processed/
 ### 第二步：训练分词器
 
 ```bash
-python scripts/train_tokenizer.py --corpus data/processed/cleaned.txt --vocab-size 32000
+python scripts/train_tokenizer.py --corpus data/processed/deduplicated.jsonl --vocab-size 32000
 ```
+
+> 分词器默认读取 JSONL 格式（需含 `text` 字段）。如果使用纯文本文件（如 `.txt`），需加 `--skip-prepare` 标志跳过语料提取步骤。
 
 训练完成后，分词器模型保存在 `models/tokenizer/classical_chinese.model`。HuggingFace 格式的封装也同时导出，可与 `datasets` 库无缝互操作。
 
@@ -329,11 +332,11 @@ python scripts/chat.py --checkpoint models/checkpoints/sft_best.pt --mode cli
 跳过数据采集，直接进入后续步骤：
 
 ```bash
-# 假设你的清洗后文本在 data/processed/cleaned.txt
+# 假设你的去重后数据在 data/processed/deduplicated.jsonl
 # 假设你的指令数据集在 data/processed/instructions/
 
 # 1. Tokenizer 训练
-python scripts/train_tokenizer.py --corpus data/processed/cleaned.txt --vocab-size 32000
+python scripts/train_tokenizer.py --corpus data/processed/deduplicated.jsonl --vocab-size 32000
 
 # 2. 预训练
 python scripts/pretrain.py --config configs/pretrain.yaml
@@ -527,7 +530,7 @@ print(response.choices[0].message.content)
 ```bash
 # 1. 用少量数据快速训练 tokenizer
 python scripts/train_tokenizer.py \
-    --corpus data/processed/cleaned.txt \
+    --corpus data/processed/deduplicated.jsonl \
     --vocab-size 4000 \
     --output models/tokenizer/debug
 
@@ -598,25 +601,27 @@ python scripts/collect_data.py --raw-dir data/raw
 如果需要单独控制采集、清洗、去重、格式化的每个步骤，可以通过 Python API：
 
 ```python
-from classic_chinese_llm.data.collector import DataCollector
-from classic_chinese_llm.data.cleaner import DataCleaner
-from classic_chinese_llm.data.deduplicator import DataDeduplicator
+from classic_chinese_llm.data.collector import Collector
+from classic_chinese_llm.data.cleaner import Cleaner, CleanerConfig
+from classic_chinese_llm.data.deduplicator import Deduplicator, DeduplicatorConfig
 from classic_chinese_llm.data.formatter import InstructionFormatter
+from classic_chinese_llm.data.sources.daizhige import DaiZhiGeSource
+from classic_chinese_llm.data.sources.wikisource import WikiSourceSource
 
-# 1. 采集
-collector = DataCollector(output_dir="data/raw")
-collector.collect_all()  # 或 collector.collect("daizhige") 指定单个源
+# 1. 采集 → data/processed/collected.jsonl
+sources = [DaiZhiGeSource(), WikiSourceSource()]
+collector = Collector(sources)
+collector.run(raw_dir="data/raw", output_dir="data/processed")
 
-# 2. 清洗
-cleaner = DataCleaner()
-cleaned = cleaner.clean("data/raw/daizhige.jsonl")
-cleaner.save(cleaned, "data/processed/cleaned_daizhige.jsonl")
+# 2. 清洗 → data/processed/cleaned.jsonl
+cleaner = Cleaner(CleanerConfig(min_text_len=20))
+cleaner.clean("data/processed/collected.jsonl", "data/processed/cleaned.jsonl")
 
-# 3. 去重
-dedup = DataDeduplicator()
-dedup.deduplicate("data/processed/cleaned_merged.jsonl", "data/processed/deduplicated.jsonl")
+# 3. 去重 → data/processed/deduplicated.jsonl
+dedup = Deduplicator(DeduplicatorConfig())
+dedup.deduplicate("data/processed/cleaned.jsonl", "data/processed/deduplicated.jsonl")
 
-# 4. 构建指令数据集
+# 4. 构建指令数据集 → data/processed/instructions/
 formatter = InstructionFormatter()
 formatter.format("data/processed/deduplicated.jsonl", "data/processed/instructions/")
 ```
@@ -644,11 +649,11 @@ config = CollectorConfig(
 
 ```bash
 # 默认配置（32K vocab，Unigram 模型）
-python scripts/train_tokenizer.py --corpus data/processed/cleaned.txt --vocab-size 32000
+python scripts/train_tokenizer.py --corpus data/processed/deduplicated.jsonl --vocab-size 32000
 
 # 自定义参数
 python scripts/train_tokenizer.py \
-    --corpus data/processed/cleaned.txt \
+    --corpus data/processed/deduplicated.jsonl \
     --vocab-size 16000 \
     --character-coverage 0.9995 \
     --output models/tokenizer/custom

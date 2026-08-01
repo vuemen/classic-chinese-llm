@@ -155,7 +155,7 @@ conda activate classic-llm
 python scripts/collect_data.py --raw-dir data/raw
 
 # 第二步：训练 SentencePiece Unigram 分词器
-python scripts/train_tokenizer.py --corpus data/processed/cleaned.txt --vocab-size 32000
+python scripts/train_tokenizer.py --corpus data/processed/deduplicated.jsonl --vocab-size 32000
 
 # 第三步：预训练（~2-3 天，建议使用 tmux/screen 后台运行）
 python scripts/pretrain.py --config configs/pretrain.yaml

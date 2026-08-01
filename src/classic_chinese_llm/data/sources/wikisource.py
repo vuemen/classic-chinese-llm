@@ -2,6 +2,9 @@
 
 原始格式: Wikimedia XML dump 文件，包含 <page> 元素。
 使用 lxml iterparse 流式解析，避免全量加载大文件。
+
+命名空间处理: 使用 {*} 通配符前缀匹配所有命名空间（包括无命名空间），
+避免硬编码 Wikimedia export 版本号带来的兼容性问题。
 """
 
 from __future__ import annotations
@@ -16,12 +19,13 @@ from classic_chinese_llm.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# XML namespace 通配符
-_NS = "{http://www.mediawiki.org/xml/export-0.11/}"
-_FALLBACK_NS = ""
-
-# 非正文命名空间（模板、分类、文件等）
+# 非正文命名空间（模板、分类、文件等）—— title 前缀匹配
 _SKIP_PREFIXES = ("Template:", "Category:", "File:", "Help:", "Wikipedia:", "Module:")
+
+
+def _ns_tag(local_name: str) -> str:
+    """生成命名空间通配符 tag，兼容任意或零命名空间。"""
+    return f"{{*}}{local_name}"
 
 
 class WikiSourceSource(BaseSource):
@@ -47,43 +51,33 @@ class WikiSourceSource(BaseSource):
     def parse(self, file_path: Path) -> list[SourceDocument]:
         """流式解析 WikiSource XML dump。
 
-        处理 .xml.bz2 时需要先解压。对每个 <page>：
-        - 跳过非正文命名空间（Template, Category 等）
-        - 提取 title 和 revision 中的 text
-        - elem.clear() 释放内存
+        .xml.bz2 文件直接流式解压 → iterparse，不写临时文件，
+        避免解压后 60-80GB 占用磁盘空间。
         """
-        # 如果是 bz2 压缩文件，先解压到临时位置
         if file_path.suffix == ".bz2":
             import bz2
-            import tempfile
 
-            logger.info("正在解压 %s ...", file_path.name)
-            with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
-                with bz2.open(file_path, "rb") as bz2_in:
-                    while True:
-                        chunk = bz2_in.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        tmp.write(chunk)
-                tmp_path = Path(tmp.name)
-            try:
-                return self._parse_xml(tmp_path)
-            finally:
-                tmp_path.unlink(missing_ok=True)
+            logger.info("正在流式解压并解析 %s (不落盘)...", file_path.name)
+            with bz2.open(file_path, "rb") as bz2_stream:
+                return self._parse_xml(bz2_stream)
 
-        return self._parse_xml(file_path)
+        return self._parse_xml(str(file_path))
 
-    def _parse_xml(self, xml_path: Path) -> list[SourceDocument]:
-        """解析解压后的 XML 文件。"""
+    def _parse_xml(self, source: object) -> list[SourceDocument]:
+        """流式解析 XML。
+
+        Args:
+            source: 文件路径字符串，或二进制文件对象（如 bz2 流）。
+        """
         docs: list[SourceDocument] = []
         try:
             for _event, elem in etree.iterparse(
-                str(xml_path),
-                tag="page",
+                source,
+                tag=_ns_tag("page"),
                 huge_tree=True,
                 recover=True,
             ):
-                title = self._find_text(elem, "title")
+                title = self._find_child_text(elem, "title")
                 revision_text = self._find_revision_text(elem)
 
                 if not title or not revision_text:
@@ -121,22 +115,22 @@ class WikiSourceSource(BaseSource):
                         prev = tmp
 
         except etree.XMLSyntaxError as e:
-            logger.error("XML 解析错误: %s — %s", xml_path.name, e)
+            logger.error("XML 解析错误: %s", e)
 
         return docs
 
     @staticmethod
-    def _find_text(elem: etree._Element, tag: str) -> str:
-        """在元素中查找子元素的文本（兼容有无 namespace）。"""
-        child = elem.find(_NS + tag) or elem.find(tag)
+    def _find_child_text(elem: etree._Element, tag: str) -> str:
+        """查找子元素并返回其文本内容（命名空间无关）。"""
+        child = elem.find(_ns_tag(tag))
         if child is not None and child.text:
             return str(child.text.strip())
         return ""
 
     def _find_revision_text(self, elem: etree._Element) -> str:
-        """提取 revision 中的 text 内容。"""
-        for rev in elem.iter("revision"):
-            text_elem = rev.find(_NS + "text") or rev.find("text")
+        """提取 revision 中的 text 内容（命名空间无关）。"""
+        for rev in elem.iter(_ns_tag("revision")):
+            text_elem = rev.find(_ns_tag("text"))
             if text_elem is not None and text_elem.text:
                 text: str = str(text_elem.text).strip()
                 # 过滤重定向页
