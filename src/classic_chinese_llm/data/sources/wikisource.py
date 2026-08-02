@@ -133,8 +133,8 @@ class WikiSourceSource(BaseSource):
             text_elem = rev.find(_ns_tag("text"))
             if text_elem is not None and text_elem.text:
                 text: str = str(text_elem.text).strip()
-                # 过滤重定向页
-                if text.upper().startswith("#REDIRECT"):
+                # 过滤重定向页（仅取前缀判断，避免全文 upper() 导致 MemoryError）
+                if text[:15].upper().startswith("#REDIRECT"):
                     return ""
                 return text
         return ""
