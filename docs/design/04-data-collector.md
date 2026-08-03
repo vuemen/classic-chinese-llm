@@ -15,7 +15,6 @@
 | 数据源 | 获取方式 | 优先级 |
 |--------|---------|:---:|
 | 殆知阁 | `git clone --depth 1 https://github.com/garychowcmu/daizhigev20.git data/raw/daizhige` | 必下 |
-| WikiSource | [dumps.wikimedia.org/zhwikisource/latest](https://dumps.wikimedia.org/zhwikisource/latest/) → `pages-articles.xml.bz2` | 推荐 |
 | GitHub 语料 | 如 [NiuTrans/Classical-Modern](https://github.com/NiuTrans/Classical-Modern) 等开源项目 | 可选 |
 | 四库全书 | [Project Gutenberg #7221](https://www.gutenberg.org/ebooks/7221) 公共领域子集 | 可选 |
 | ctext.org | [ctext.org](https://ctext.org/zh) 注册后手动逐章下载 | 精选几本 |
@@ -26,7 +25,7 @@
 
 | 编号 | 需求 | 说明 |
 |------|------|------|
-| F1 | 多数据源适配 | 支持 5 个数据源（殆知阁、WikiSource、GitHub、四库全书、ctext.org），每个来源以统一接口接入 |
+| F1 | 多数据源适配 | 支持 4 个数据源（殆知阁、GitHub、四库全书、ctext.org），每个来源以统一接口接入 |
 | F2 | 可插拔适配器 | 新增数据源只需新增一个适配器类，不修改 Collector 核心逻辑 |
 | F3 | 统一采集流程 | 每个数据源执行 discover → parse → validate 三阶段流程 |
 | F4 | 统一输出格式 | 所有来源输出统一 schema 的 JSONL，含 text + 元信息（source、title、era、genre 等） |
@@ -100,31 +99,7 @@ class SourceLike(Protocol):
 
 **最终选择**: **JSONL**。每条记录一行 JSON，支持直接 `head`/`tail` 查看、逐行流式处理、追加写入无需重写全文件。对于 ~2-4 亿 token 的语料规模，JSONL 的存储开销约 2-3GB，完全可接受。
 
-### 2.3 XML 解析（WikiSource 数据源专用）
-
-| 方案 | 速度 | 内存 | API | 已有依赖 | 结论 |
-|------|------|------|-----|----------|------|
-| **lxml iterparse** | ⭐⭐⭐ | ⭐⭐⭐ 流式 | ⭐⭐ 稍复杂 | ✅ | ✅ 选用 |
-| lxml etree | ⭐⭐ | ⭐ 全量加载 | ⭐⭐⭐ | ✅ | ❌ 大数据 OOM |
-| ElementTree | ⭐ | ⭐ 全量加载 | ⭐⭐⭐ | 0（标准库） | ❌ 速度慢 |
-| BeautifulSoup | ⭐ | ⭐ 全量加载 | ⭐⭐⭐ | ✅ | ❌ 不适合大 XML |
-
-WikiSource XML dump 可达数百 MB，全量加载会导致内存溢出。
-
-**最终选择**: **lxml iterparse**。流式解析，仅当前元素驻留内存。关键用法：
-
-```python
-from lxml import etree
-
-for event, elem in etree.iterparse(xml_path, tag="{*}page"):
-    title = elem.findtext("{*}title")
-    text = elem.findtext(".//{*}text")
-    if text:
-        yield SourceDocument(text=text, source="wikisource", title=title, ...)
-    elem.clear()  # 释放已处理元素的内存
-```
-
-### 2.4 文件编码检测
+### 2.3 文件编码检测
 
 | 方案 | 准确率 | 速度 | 额外依赖 | 结论 |
 |------|--------|------|----------|------|
@@ -150,7 +125,6 @@ src/classic_chinese_llm/data/
 │   ├── __init__.py                # 注册机制
 │   ├── base.py                    # BaseSource 抽象基类
 │   ├── daizhige.py                # 殆知阁 txt 适配器
-│   ├── wikisource.py              # WikiSource XML 适配器
 │   ├── github_corpora.py          # GitHub 开源语料适配器
 │   ├── sikuquanshu.py             # 四库全书适配器
 │   └── ctext.py                   # ctext.org 手动补充适配器
@@ -170,7 +144,7 @@ class SourceDocument:
     """统一文档模型 —— 所有数据源适配器的输出格式。"""
 
     text: str                                    # 正文内容
-    source: str                                  # 来源标识: daizhige | wikisource | github | siku | ctext
+    source: str                                  # 来源标识: daizhige | github | siku | ctext
     title: str = ""                              # 篇名/书名
     author: str = ""                             # 作者（朝代+人名，如 "唐·杜甫"）
     era: str = ""                                # 朝代: 先秦/两汉/魏晋南北朝/唐/宋/元/明/清
@@ -435,7 +409,6 @@ from classic_chinese_llm.config.paths import PathConfig
 from classic_chinese_llm.utils.logging_config import setup_logging
 from classic_chinese_llm.data.collector import Collector
 from classic_chinese_llm.data.sources.daizhige import DaiZhiGeSource
-from classic_chinese_llm.data.sources.wikisource import WikiSourceSource
 # ... 其他 source 导入
 
 
@@ -452,7 +425,6 @@ def main():
 
     all_sources = [
         DaiZhiGeSource(),
-        WikiSourceSource(),
         # GitHubSource(),
         # SiKuSource(),
         # CtextSource(),
@@ -517,29 +489,9 @@ def discover(self, raw_dir: Path) -> list[Path]:
 
 这样 Collector 保持简单，增量逻辑由各适配器按需实现。
 
-### 4.4 WikiSource XML 流式解析
+### 4.4 数据源注册机制
 
-WikiSource 的 XML dump 格式为：
-
-```xml
-<mediawiki>
-  <page>
-    <title>论语</title>
-    <revision>
-      <text xml:space="preserve">子曰：学而时习之...</text>
-    </revision>
-  </page>
-  <page>...</page>
-</mediawiki>
-```
-
-关键挑战是 namespace 处理。WikiSource dump 可能带或不带 namespace 前缀。`lxml.iterparse` 的 `tag="{*}page"` 通配符可同时匹配两种。
-
-`elem.clear()` 是关键的内存优化——处理完一个 `<page>` 后立即释放其子元素树，保证数百 MB 的 XML 也能在数 GB 内存内完成解析。
-
-### 4.5 数据源注册机制
-
-当前 5 个数据源通过硬编码列表注册。随着来源增多，可引入基于 `importlib` 的自动发现：
+当前 4 个数据源通过硬编码列表注册。随着来源增多，可引入基于 `importlib` 的自动发现：
 
 ```python
 # sources/__init__.py
@@ -555,7 +507,7 @@ def get_source(name: str) -> BaseSource:
     return _registry[name]()
 ```
 
-但 Phase 2 中 5 个来源手写即可，自动注册留待来源数 >10 时再引入。
+但 Phase 2 中 4 个来源手写即可，自动注册留待来源数 >10 时再引入。
 
 ---
 
@@ -575,7 +527,6 @@ Collector 是 Phase 2 数据管道的起点。它的输出文件 `collected.json
 
 - [ ] `BaseSource` 的 `@abstractmethod` 正确拦截未实现的方法
 - [ ] 殆知阁 txt 适配器正确检测 GBK/UTF-8 编码并解析
-- [ ] WikiSource XML 适配器流式解析 200MB+ dump 不 OOM
 - [ ] 所有适配器的输出 `SourceDocument.source` 字段正确
 - [ ] Collector 在有 0 个文件的来源时不崩溃（skip）
 - [ ] 解析失败重试 3 次后跳过该文件，继续处理下一个

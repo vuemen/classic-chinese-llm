@@ -140,7 +140,6 @@ export CUDA_VISIBLE_DEVICES=0
 | 数据源 | 目录 | 获取方式 |
 |--------|------|---------|
 | **殆知阁** ⭐ | `data/raw/daizhige/` | `git clone --depth 1 https://github.com/garychowcmu/daizhigev20.git data/raw/daizhige` |
-| WikiSource | `data/raw/wikisource/` | [dumps.wikimedia.org/zhwikisource/latest](https://dumps.wikimedia.org/zhwikisource/latest/) → 下载 `pages-articles.xml.bz2` |
 | GitHub 语料 | `data/raw/github/` | 如 [NiuTrans/Classical-Modern](https://github.com/NiuTrans/Classical-Modern)（文言-白话平行语料，可选） |
 | 四库全书 | `data/raw/siku/` | [Project Gutenberg #7221](https://www.gutenberg.org/ebooks/7221)（公共领域子集，可选） |
 | ctext.org | `data/raw/ctext/` | [ctext.org](https://ctext.org/zh) 注册后逐章手动下载（质量最高，精选几本即可） |
@@ -190,7 +189,6 @@ classic-chinese-llm/
 │   ├── data/                        # 数据管道
 │   │   ├── sources/                 #   可插拔数据源适配器
 │   │   │   ├── daizhige.py          #     殆知阁
-│   │   │   ├── wikisource.py        #     WikiSource 中文
 │   │   │   ├── github_corpora.py    #     GitHub 开源语料
 │   │   │   ├── sikuquanshu.py       #     四库全书公开子集
 │   │   │   └── ctext.py             #     ctext.org

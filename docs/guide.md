@@ -162,17 +162,6 @@ git clone --depth 1 https://github.com/garychowcmu/daizhigev20.git data/raw/daiz
 
 > 殆知阁收录约 16,000 种古籍、20 万卷，涵盖经/史/子/集/诗/艺/易/医/佛/道十大类，格式为 `.txt`。
 
-**WikiSource 中文**（维基文库 XML dump）：
-
-```bash
-# 下载最新 pages-articles dump
-# 地址：https://dumps.wikimedia.org/zhwikisource/latest/
-# 找到 zhwikisource-<日期>-pages-articles.xml.bz2 下载
-# 放到 data/raw/wikisource/ 下（无需解压，适配器自动处理）
-```
-
-> `.xml.bz2` 文件通常几百 MB，`lxml.iterparse` 流式解析，内存友好。
-
 **GitHub 开源语料**（可选扩展）：
 
 | 项目 | 格式 | 说明 |
@@ -204,8 +193,8 @@ git clone --depth 1 https://github.com/GITenberg/-------_7221.git data/raw/siku/
 #### 优先级建议
 
 ```
-殆知阁 > WikiSource > GitHub语料 > 四库全书 > ctext
-  必下      推荐        可选        可选     精选几本
+殆知阁 > GitHub语料 > 四库全书 > ctext
+  必下      可选        可选     精选几本
 ```
 
 只需下载殆知阁即可跑通全流程，其他数据源逐步补充。
@@ -215,7 +204,6 @@ git clone --depth 1 https://github.com/GITenberg/-------_7221.git data/raw/siku/
 ```
 data/raw/
 ├── daizhige/       # .txt 文件（可含子目录）
-├── wikisource/     # .xml 或 .xml.bz2
 ├── github/         # .txt 或 .jsonl（按项目建子目录）
 ├── siku/           # .txt 文件（建议按 经/史/子/集 建子目录）
 └── ctext/          # .txt 文件
@@ -606,10 +594,9 @@ from classic_chinese_llm.data.cleaner import Cleaner, CleanerConfig
 from classic_chinese_llm.data.deduplicator import Deduplicator, DeduplicatorConfig
 from classic_chinese_llm.data.formatter import InstructionFormatter
 from classic_chinese_llm.data.sources.daizhige import DaiZhiGeSource
-from classic_chinese_llm.data.sources.wikisource import WikiSourceSource
 
 # 1. 采集 → data/processed/collected.jsonl
-sources = [DaiZhiGeSource(), WikiSourceSource()]
+sources = [DaiZhiGeSource()]
 collector = Collector(sources)
 collector.run(raw_dir="data/raw", output_dir="data/processed")
 
@@ -634,7 +621,7 @@ formatter.format("data/processed/deduplicated.jsonl", "data/processed/instructio
 from classic_chinese_llm.config.settings import CollectorConfig
 
 config = CollectorConfig(
-    enabled_sources=["daizhige", "wikisource"],  # 仅启用这两个源
+    enabled_sources=["daizhige"],  # 仅启用这个源
     retry_attempts=5,                             # 重试次数
 )
 ```

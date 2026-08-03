@@ -2,7 +2,7 @@
 
 提供:
 - BaseSource: 抽象基类
-- 5 个内置数据源适配器 (需要 chardet, lxml 等可选依赖)
+- 4 个内置数据源适配器 (需要 chardet, lxml 等可选依赖)
 
 注意: 采用惰性导入 —— 仅在真正访问具体适配器时才加载对应模块。
 """
@@ -26,10 +26,6 @@ def __getattr__(name: str) -> Any:
             "classic_chinese_llm.data.sources.sikuquanshu",
             "SiKuQuanShuSource",
         ),
-        "WikiSourceSource": (
-            "classic_chinese_llm.data.sources.wikisource",
-            "WikiSourceSource",
-        ),
     }
 
     if name in _imports:
@@ -45,7 +41,6 @@ def __getattr__(name: str) -> Any:
 __all__ = [
     "BaseSource",
     "DaiZhiGeSource",
-    "WikiSourceSource",
     "GitHubCorpusSource",
     "SiKuQuanShuSource",
     "CtextSource",

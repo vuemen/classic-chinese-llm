@@ -2,7 +2,7 @@
 
 用法:
     python scripts/collect_data.py --raw-dir data/raw --output-dir data/processed
-    python scripts/collect_data.py --sources daizhige wikisource
+    python scripts/collect_data.py --sources daizhige
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ from classic_chinese_llm.data.sources.ctext import CtextSource
 from classic_chinese_llm.data.sources.daizhige import DaiZhiGeSource
 from classic_chinese_llm.data.sources.github_corpora import GitHubCorpusSource
 from classic_chinese_llm.data.sources.sikuquanshu import SiKuQuanShuSource
-from classic_chinese_llm.data.sources.wikisource import WikiSourceSource
 from classic_chinese_llm.utils.logging_config import setup_logging
 
 
@@ -27,7 +26,6 @@ def _build_sources(raw_dir: Path) -> list:
     """构建所有数据源适配器实例。"""
     return [
         DaiZhiGeSource(raw_dir),
-        WikiSourceSource(raw_dir),
         GitHubCorpusSource(raw_dir),
         SiKuQuanShuSource(raw_dir),
         CtextSource(raw_dir),
@@ -38,7 +36,6 @@ _SOURCE_MAP = {
     s.name: s
     for s in [
         DaiZhiGeSource,
-        WikiSourceSource,
         GitHubCorpusSource,
         SiKuQuanShuSource,
         CtextSource,

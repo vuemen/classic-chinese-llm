@@ -87,7 +87,7 @@ class CollectorConfig(BaseModel):
     retry_attempts: int = Field(default=3, ge=1, le=10)
     retry_backoff: float = Field(default=2.0, ge=1.0, le=10.0)
     enabled_sources: list[str] = Field(
-        default_factory=lambda: ["daizhige", "wikisource", "github", "siku", "ctext"]
+        default_factory=lambda: ["daizhige", "github", "siku", "ctext"]
     )
 
 

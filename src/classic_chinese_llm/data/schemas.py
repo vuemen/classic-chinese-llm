@@ -14,7 +14,7 @@ class SourceDocument:
 
     字段:
         text: 正文内容（必填）
-        source: 来源标识，如 daizhige, wikisource, github, siku, ctext
+        source: 来源标识，如 daizhige, github, siku, ctext
         title: 篇名/书名
         author: 作者
         era: 朝代

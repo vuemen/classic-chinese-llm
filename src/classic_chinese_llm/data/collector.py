@@ -25,7 +25,7 @@ class Collector:
     3. 输出统一 JSONL 到 output_dir
 
     用法:
-        sources = [DaiZhiGeSource(data_dir), WikiSourceSource(data_dir)]
+        sources = [DaiZhiGeSource(data_dir)]
         collector = Collector(sources, retry_attempts=3)
         collector.run(raw_dir=..., output_dir=...)
     """
