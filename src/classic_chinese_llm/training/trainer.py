@@ -156,6 +156,10 @@ class Trainer:
 
         Args:
             loss_fn: 损失计算函数, 签名为 (model, batch) -> scalar loss。
+
+        中断处理:
+            Ctrl+C (KeyboardInterrupt) 会优雅保存 checkpoint 后退出,
+            下次运行自动从该 checkpoint 恢复。
         """
         self._notify_callbacks("on_train_begin")
 
@@ -167,79 +171,94 @@ class Trainer:
         self.model.to(device)
         self.model.train()
 
-        while not self._should_stop:
-            self.epoch += 1
+        try:
+            while not self._should_stop:
+                self.epoch += 1
 
-            for batch in self.train_dataloader:
-                self.global_step += 1
+                for batch in self.train_dataloader:
+                    self.global_step += 1
 
-                # 将 batch 移到设备
-                batch = {k: v.to(device) for k, v in batch.items()}
+                    # 将 batch 移到设备
+                    batch = {k: v.to(device) for k, v in batch.items()}
 
-                # ── 梯度累积循环 ──
-                # 在累积的第一步 zero_grad, 后续梯度直接累加
-                if (self.global_step - 1) % accum_steps == 0:
-                    self.optimizer.zero_grad()
+                    # ── 梯度累积循环 ──
+                    # 在累积的第一步 zero_grad, 后续梯度直接累加
+                    if (self.global_step - 1) % accum_steps == 0:
+                        self.optimizer.zero_grad()
 
-                # 混合精度前向传播
-                with torch.autocast(
-                    device_type=device.type if device.type != "cpu" else "cuda",
-                    dtype=self.dtype,
-                ):
-                    loss = loss_fn(self.model, batch)
-                    loss = loss / accum_steps  # 归一化到有效 batch
+                    # 混合精度前向传播
+                    with torch.autocast(
+                        device_type=device.type if device.type != "cpu" else "cuda",
+                        dtype=self.dtype,
+                    ):
+                        loss = loss_fn(self.model, batch)
+                        loss = loss / accum_steps  # 归一化到有效 batch
 
-                # 反向传播 (autocast 外)
-                if self.scaler is not None:
-                    self.scaler.scale(loss).backward()
-                else:
-                    loss.backward()  # type: ignore[no-untyped-call]
-
-                step_loss = loss.item() * accum_steps
-
-                # 仅在累积足够步数后更新参数
-                if self.global_step % accum_steps == 0:
-                    # 梯度裁剪
+                    # 反向传播 (autocast 外)
                     if self.scaler is not None:
-                        self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-
-                    # 优化器步进
-                    if self.scaler is not None:
-                        self.scaler.step(self.optimizer)
-                        self.scaler.update()
+                        self.scaler.scale(loss).backward()
                     else:
-                        self.optimizer.step()
+                        loss.backward()  # type: ignore[no-untyped-call]
 
-                    self.scheduler.step()
+                    step_loss = loss.item() * accum_steps
 
-                current_lr = self.scheduler.get_last_lr()[0]
+                    # 仅在累积足够步数后更新参数
+                    if self.global_step % accum_steps == 0:
+                        # 梯度裁剪
+                        if self.scaler is not None:
+                            self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
-                # ── 回调: step 结束 ──
-                self._notify_callbacks("on_step_end", loss=step_loss, lr=current_lr)
+                        # 优化器步进
+                        if self.scaler is not None:
+                            self.scaler.step(self.optimizer)
+                            self.scaler.update()
+                        else:
+                            self.optimizer.step()
 
-                # ── 定期评估 ──
-                if self.global_step % train_cfg.eval_every == 0:
-                    metrics = self._evaluate(loss_fn)
-                    self._notify_callbacks("on_eval_end", metrics=metrics)
+                        self.scheduler.step()
 
-                # ── 定期保存 ──
-                if self.global_step % train_cfg.save_every == 0:
-                    self._save(tag=f"step_{self.global_step}")
+                    current_lr = self.scheduler.get_last_lr()[0]
 
-                # ── 终止条件 ──
-                if self.global_step >= self.total_steps:
-                    self._should_stop = True
+                    # ── 回调: step 结束 ──
+                    self._notify_callbacks("on_step_end", loss=step_loss, lr=current_lr)
+
+                    # ── 定期评估 ──
+                    if self.global_step % train_cfg.eval_every == 0:
+                        metrics = self._evaluate(loss_fn)
+                        self._notify_callbacks("on_eval_end", metrics=metrics)
+
+                    # ── 定期保存 ──
+                    if self.global_step % train_cfg.save_every == 0:
+                        self._save(tag=f"step_{self.global_step}")
+
+                    # ── 终止条件 ──
+                    if self.global_step >= self.total_steps:
+                        self._should_stop = True
+                        break
+
+                self._notify_callbacks("on_epoch_end")
+
+                if train_cfg.max_epochs and self.epoch >= train_cfg.max_epochs:
                     break
 
-            self._notify_callbacks("on_epoch_end")
+            # 正常完成: 最终保存
+            self._save(tag="latest")
+            self._notify_callbacks("on_train_end")
 
-            if train_cfg.max_epochs and self.epoch >= train_cfg.max_epochs:
-                break
-
-        # 最终保存
-        self._save(tag="latest")
-        self._notify_callbacks("on_train_end")
+        except KeyboardInterrupt:
+            logger.info(
+                "收到中断信号 (Ctrl+C)，正在保存 checkpoint @ step %d...",
+                self.global_step,
+            )
+            self._save(tag="latest")
+            self._notify_callbacks("on_train_end")
+            logger.info(
+                "Checkpoint 已保存，下次运行将自动从此处恢复。已用步数: %d / %d (%.1f%%)",
+                self.global_step,
+                self.total_steps,
+                100 * self.global_step / max(self.total_steps, 1),
+            )
 
     @torch.no_grad()
     def _evaluate(self, loss_fn: LossFn) -> dict[str, float]:
