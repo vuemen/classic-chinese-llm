@@ -54,19 +54,38 @@ def load_config[T: Settings](
     return config_cls(**raw)
 
 
+def _resolve_config_path(config_path: str | Path) -> Path:
+    """解析配置文件路径，兼容两种相对路径写法。
+
+    支持:
+    - 绝对路径: 原样返回
+    - 相对项目根目录的路径 (如 "configs/pretrain.yaml"，与 CLI 默认值一致)
+    - 相对 configs_dir 的路径 (如 "pretrain.yaml")
+
+    优先按项目根目录解析；若该路径不存在，再回退到 configs_dir 解析。
+    """
+    path = Path(config_path)
+    if path.is_absolute():
+        return path
+
+    try:
+        paths = PathConfig.get()
+    except RuntimeError:
+        # PathConfig 未初始化时，相对于当前工作目录解析
+        return path.resolve()
+
+    if (paths.root / path).exists():
+        return paths.root / path
+    return paths.configs_dir / path
+
+
 def _load_yaml_with_inheritance(config_path: str | Path) -> dict[str, Any]:
     """递归加载 YAML 文件，支持 extends 继承链。
 
     extends 值为相对路径时，相对于当前 YAML 所在目录解析。
     子配置覆盖父配置的同名字段（深度合并）。
     """
-    path = Path(config_path)
-    if not path.is_absolute():
-        try:
-            path = PathConfig.get().configs_dir / path
-        except RuntimeError:
-            # PathConfig 未初始化时，尝试相对于当前工作目录
-            path = path.resolve()
+    path = _resolve_config_path(config_path)
 
     with open(path, encoding="utf-8") as f:
         raw: dict[str, Any] | None = yaml.safe_load(f)

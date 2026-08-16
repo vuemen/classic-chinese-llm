@@ -131,6 +131,28 @@ class TestPretrainConfig:
         assert config.training.max_steps == 1000  # 从父配置继承
         assert config.dtype == "bf16"  # 从父配置继承
 
+    def test_load_relative_path_with_configs_prefix(self, project_root: Path) -> None:
+        """相对路径含 configs/ 前缀时能正确解析（与 CLI 默认用法一致）。"""
+        PathConfig.reset()
+        PathConfig.initialize(project_root)
+
+        with open(project_root / "configs" / "default.yaml", "w", encoding="utf-8") as f:
+            yaml.dump({"training": {"max_steps": 1234}}, f)
+
+        config = load_config("configs/default.yaml", PretrainConfig)
+        assert config.training.max_steps == 1234
+
+    def test_load_relative_path_bare(self, project_root: Path) -> None:
+        """相对路径不含前缀时按 configs_dir 解析。"""
+        PathConfig.reset()
+        PathConfig.initialize(project_root)
+
+        with open(project_root / "configs" / "default.yaml", "w", encoding="utf-8") as f:
+            yaml.dump({"training": {"max_steps": 2345}}, f)
+
+        config = load_config("default.yaml", PretrainConfig)
+        assert config.training.max_steps == 2345
+
 
 class TestSFTConfig:
     """SFTConfig 加载测试。"""

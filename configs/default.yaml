@@ -6,11 +6,6 @@ logging:
   level: "INFO"
   log_dir: "logs"
 
-paths:
-  data_dir: "data"
-  model_dir: "models"
-  checkpoint_dir: "models/checkpoints"
-
 model:
   vocab_size: 32000
   d_model: 768
