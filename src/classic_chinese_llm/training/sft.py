@@ -101,12 +101,14 @@ class SFTRunner:
             max_length=self.config.model.max_seq_len,
             is_sft=True,
         )
+        # num_workers=0: Windows 下 spawn 会把 dataset pickle 到 worker，
+        # 与预训练同理由改用单进程加载，避免内存开销。
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.config.training.batch_size,
             shuffle=True,
             collate_fn=collator,
-            num_workers=4,
+            num_workers=0,
             pin_memory=True,
         )
         val_loader = (
@@ -114,7 +116,7 @@ class SFTRunner:
                 val_dataset,
                 batch_size=self.config.training.batch_size,
                 collate_fn=collator,
-                num_workers=2,
+                num_workers=0,
                 pin_memory=True,
             )
             if val_dataset

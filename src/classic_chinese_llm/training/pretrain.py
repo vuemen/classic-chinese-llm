@@ -94,7 +94,10 @@ class PretrainRunner:
                 max_length=self.config.model.max_seq_len,
                 is_sft=False,
             ),
-            num_workers=4,
+            # Windows 下 DataLoader 用 spawn 启动 worker，会把整个 in-memory
+            # dataset（约 20 亿字）pickle 到每个进程，触发 MemoryError。
+            # tokenize 在 __getitem__ 里做、开销相对 GPU 可忽略，故用 0 单进程加载。
+            num_workers=0,
             pin_memory=True,
         )
 
