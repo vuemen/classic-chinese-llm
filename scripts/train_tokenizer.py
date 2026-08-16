@@ -57,6 +57,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="训练线程数（默认 16）",
     )
     parser.add_argument(
+        "--input-sentence-size",
+        type=int,
+        default=20_000_000,
+        help="训练时采样的最大句读片段数（默认 20,000,000，约 2-3 亿字符）",
+    )
+    parser.add_argument(
+        "--num-sub-iterations",
+        type=int,
+        default=2,
+        help="EM 优化迭代次数（默认 2）",
+    )
+    parser.add_argument(
         "--skip-prepare",
         action="store_true",
         help="跳过语料准备（当 --corpus 直接指向 txt 文件时使用）",
@@ -83,6 +95,8 @@ def main(argv: list[str] | None = None) -> None:
         model_prefix=str(Path(args.output_dir) / "classical_chinese"),
         output_dir=args.output_dir,
         num_threads=args.num_threads,
+        input_sentence_size=args.input_sentence_size,
+        num_sub_iterations=args.num_sub_iterations,
     )
 
     # Step 1: 训练 SentencePiece 模型

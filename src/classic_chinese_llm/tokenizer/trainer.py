@@ -13,6 +13,7 @@ from pathlib import Path
 import sentencepiece as spm
 
 from classic_chinese_llm.tokenizer.config import TokenizerConfig
+from classic_chinese_llm.tokenizer.pretokenizer import ClassicalChinesePreTokenizer
 from classic_chinese_llm.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -33,7 +34,11 @@ class TokenizerTrainer:
         self._model_prefix = Path(config.model_prefix)
 
     def prepare_corpus(self) -> Path:
-        """从 deduplicated.jsonl 提取纯文本作为训练语料。
+        """从 deduplicated.jsonl 提取纯文本并按句读断句，作为训练语料。
+
+        JSONL 每条记录的 text 是一整篇文档，这里用 ClassicalChinesePreTokenizer
+        按句读标点断句为句读片段，一行一个片段，使 input_sentence_size 以
+        句读片段为单位采样，控制训练语料规模。
 
         Returns:
             训练语料 txt 文件的路径。
@@ -52,6 +57,7 @@ class TokenizerTrainer:
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info("正在准备训练语料: %s → %s", corpus_input, corpus_output)
+        pretokenizer = ClassicalChinesePreTokenizer()
         line_count = 0
         char_count = 0
 
@@ -65,15 +71,27 @@ class TokenizerTrainer:
                     continue
                 record = json.loads(line)
                 text = record.get("text", "").strip()
-                if text:
-                    # 最终清洗：多余空白合并
-                    cleaned = " ".join(text.split())
-                    f_out.write(cleaned + "\n")
-                    line_count += 1
-                    char_count += len(cleaned)
+                if not text:
+                    continue
+                # 最终清洗：多余空白合并
+                cleaned = " ".join(text.split())
+                # 按句读标点断句，一行一个片段（而非一行一篇文档）
+                for sentence in pretokenizer.pre_tokenize(cleaned):
+                    sentence = sentence.strip()
+                    if sentence:
+                        f_out.write(sentence + "\n")
+                        line_count += 1
+                        char_count += len(sentence)
+
+        if self.config.input_sentence_size >= line_count:
+            logger.warning(
+                "input_sentence_size=%d 不小于句读片段数=%d，采样未生效，将使用全部语料",
+                self.config.input_sentence_size,
+                line_count,
+            )
 
         logger.info(
-            "语料准备完成: %d 行, %d 字符, 文件 %s",
+            "语料准备完成: %d 句读片段, %d 字符, 文件 %s",
             line_count,
             char_count,
             corpus_output,

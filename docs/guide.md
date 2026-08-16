@@ -235,6 +235,8 @@ python scripts/train_tokenizer.py --corpus data/processed/deduplicated.jsonl --v
 
 > 分词器默认读取 JSONL 格式（需含 `text` 字段）。如果使用纯文本文件（如 `.txt`），需加 `--skip-prepare` 标志跳过语料提取步骤。
 
+> 预计耗时：约 1-2 小时（单机 CPU，16 线程）。脚本会先把每篇文档按句读标点断成句读片段，再采样约 2000 万片段（约 2-3 亿字符）训练 32K 词表。
+
 训练完成后，分词器模型保存在 `models/tokenizer/classical_chinese.model`。HuggingFace 格式的封装也同时导出，可与 `datasets` 库无缝互操作。
 
 可通过以下方式验证分词效果：

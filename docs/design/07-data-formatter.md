@@ -663,13 +663,13 @@ Phase 4 的预训练直接使用 Deduplicator 输出的 `deduplicated.jsonl`（�
 [5 个数据源]
      │
      ▼
- Collector  ──→  data/processed/collected.jsonl     (~3-6亿字符)
+ Collector  ──→  data/processed/collected.jsonl     (~18亿字符)
      │
      ▼
- Cleaner    ──→  data/processed/cleaned.jsonl        (~2.5-5亿字符, 清洗损耗~15%)
+ Cleaner    ──→  data/processed/cleaned.jsonl        (~15亿字符, 清洗损耗~15%)
      │
      ▼
- Deduplicator ──→ data/processed/deduplicated.jsonl  (~2-4亿字符, 去重损耗~10-20%)
+ Deduplicator ──→ data/processed/deduplicated.jsonl  (~14亿字符, 去重损耗~10-20%)
      │
      ├──→ Pretrain (Phase 4) — 直接使用去重后的纯文本
      │

@@ -22,7 +22,7 @@
 
 ### 1.2 非功能需求
 
-- **训练效率**: 32K vocab 在 ~2-4 亿字符语料上训练，2 小时内完成（单机 CPU，16 线程）
+- **训练效率**: 32K vocab 在 ~2-3 亿字符采样语料上训练，1-2 小时内完成（单机 CPU，16 线程）
 - **零 OOV**: `byte_fallback = True` 保证任意 Unicode 输入均能编码，不会产生 `[UNK]` token
 - **HuggingFace 兼容**: 封装后的 tokenizer 与 `datasets`、`accelerate`、`transformers` 库完全互操作
 - **训练确定性**: 固定 seed 保证相同输入 + 相同参数 → 相同 vocab
@@ -121,7 +121,7 @@ spm.SentencePieceTrainer.train(
     vocab_size=32000,
     model_type="unigram",
     character_coverage=0.99995,
-    input_sentence_size=10_000_000,
+    input_sentence_size=20_000_000,
     shuffle_input_sentence=True,
     num_threads=16,
     byte_fallback=True,
@@ -308,7 +308,7 @@ class TokenizerConfig:
     byte_fallback: bool = True
 
     # ─── 训练参数 ───
-    input_sentence_size: int = 10_000_000  # 训练时最多采样的句子数
+    input_sentence_size: int = 20_000_000  # 训练时最多采样的句读片段数（约 2-3 亿字符）
     shuffle_input_sentence: bool = True
     num_threads: int = 16
     num_sub_iterations: int = 2  # EM 优化迭代次数
@@ -382,6 +382,7 @@ from pathlib import Path
 import sentencepiece as spm
 
 from classic_chinese_llm.tokenizer.config import TokenizerConfig
+from classic_chinese_llm.tokenizer.pretokenizer import ClassicalChinesePreTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -402,7 +403,11 @@ class TokenizerTrainer:
         self._model_prefix = Path(config.model_prefix)
 
     def prepare_corpus(self) -> Path:
-        """从 deduplicated.jsonl 提取纯文本作为训练语料。
+        """从 deduplicated.jsonl 提取纯文本并按句读断句，作为训练语料。
+
+        JSONL 每条记录的 text 是一整篇文档，这里用 ClassicalChinesePreTokenizer
+        按句读标点断句为句读片段，一行一个片段，使 input_sentence_size 以
+        句读片段为单位采样，控制训练语料规模。
 
         Returns:
             训练语料 txt 文件的路径。
@@ -417,6 +422,7 @@ class TokenizerTrainer:
             )
 
         logger.info("正在准备训练语料: %s → %s", corpus_input, corpus_output)
+        pretokenizer = ClassicalChinesePreTokenizer()
         line_count = 0
         char_count = 0
 
@@ -425,15 +431,26 @@ class TokenizerTrainer:
                 for line in f_in:
                     record = json.loads(line)
                     text = record.get("text", "").strip()
-                    if text:
-                        # 最终清洗：空行合并、多余空白去除
-                        cleaned = " ".join(text.split())
-                        out.write(cleaned + "\n")
-                        line_count += 1
-                        char_count += len(cleaned)
+                    if not text:
+                        continue
+                    # 最终清洗：空行合并、多余空白去除
+                    cleaned = " ".join(text.split())
+                    # 按句读标点断句，一行一个片段（而非一行一篇文档）
+                    for sentence in pretokenizer.pre_tokenize(cleaned):
+                        sentence = sentence.strip()
+                        if sentence:
+                            out.write(sentence + "\n")
+                            line_count += 1
+                            char_count += len(sentence)
+
+        if self.config.input_sentence_size >= line_count:
+            logger.warning(
+                "input_sentence_size=%d 不小于句读片段数=%d，采样未生效，将使用全部语料",
+                self.config.input_sentence_size, line_count,
+            )
 
         logger.info(
-            "语料准备完成: %d 行, %d 字符, 文件 %s",
+            "语料准备完成: %d 句读片段, %d 字符, 文件 %s",
             line_count, char_count, corpus_output,
         )
         return corpus_output
@@ -885,7 +902,7 @@ CJK 扩展 B–H:                          大量生僻字
 
 `character_coverage = 0.99995` 意味着：
 - 训练数据中排频次最低的 0.005%（十万分之五）的字符将被视为 "未知" 字符
-- 在 2-4 亿字的语料中，出现频率低于 ~100 次的极生僻字符可能被排除
+- 在约 2-3 亿字的采样语料中，出现频率低于 ~100 次的极生僻字符可能被排除
 - 被排除的字符由 `byte_fallback` 机制按 UTF-8 字节序列编码，不会产生 `[UNK]`
 
 **为什么不设为 1.0？**
@@ -988,7 +1005,7 @@ text = "子曰：「學而時習之，不亦說乎？有朋自遠方來，不亦
 
 | 参数 | 取值 | 依据 |
 |------|------|------|
-| `input_sentence_size` | 10,000,000 | 文言文语料总量约 2-4 亿字。10M 行的采样量覆盖了约 50-70% 的语料，在训练速度和 vocab 质量间平衡 |
+| `input_sentence_size` | 20,000,000 | 训练时最多采样的句读片段数。语料在 `prepare_corpus` 阶段已按句读标点断句（一行 ≈ 12-15 字），20M 片段 ≈ 2.4-3 亿字符，在训练速度与 vocab 质量间平衡 |
 | `num_sub_iterations` | 2 | EM 算法迭代次数。Unigram 论文建议 2-3 次是 sweet spot；更多迭代趋于过拟合，更少则未充分收敛 |
 | `max_sentencepiece_length` | 16 | 单个子词的最大字符数。16 字在文言文中约等于 2-3 个短句的长度，足够覆盖 "四字成语+虚词+其他" 的多字固定搭配。更大的值容易产生数据中偶然共现的"幽灵子词" |
 | `split_by_unicode_script` | True | 按 Unicode 区块（汉字、标点、拉丁字母、数字）分片处理。文言文语料可能混入少量英文/数字注释，此参数防止跨脚本的不合理合并 |
@@ -999,12 +1016,12 @@ text = "子曰：「學而時習之，不亦說乎？有朋自遠方來，不亦
 **训练时间估算**:
 
 ```
-语料: 10,000,000 行 × 平均 25 字/行 = 250,000,000 字符
+语料: 20,000,000 句读片段 × 平均 12-15 字 ≈ 240,000,000-300,000,000 字符
 vocab_size: 32,000
 线程: 16
-算法: Unigram (O(N × V × iter) where N=句子数, V=vocab_size)
+算法: Unigram (O(N × V × iter) where N=句读片段数, V=vocab_size)
 
-预计耗时: 45-90 分钟（现代 16 核 CPU）
+预计耗时: 1-2 小时（现代 16 核 CPU）
 ```
 
 ### 4.6 PreTrainedTokenizerFast 序列化与兼容性
@@ -1095,7 +1112,7 @@ dataset = load_dataset(
 
 ## 6. 验证清单
 
-- [ ] SentencePiece 训练在 2 小时内完成（~10M 行文言文语料，32K vocab）
+- [ ] SentencePiece 训练在 1-2 小时内完成（~20M 句读片段、约 2-3 亿字符，32K vocab）
 - [ ] 训练后的 .model 和 .vocab 文件可被 SentencePiece Python API 正确加载
 - [ ] `character_coverage=0.99995` 下，vocab 中单字汉字数 ≥ 10,000
 - [ ] `byte_fallback=True`：任意 Unicode 输入（含生僻字如 U+28B81）可正常编码/解码，round-trip 无损

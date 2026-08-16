@@ -18,7 +18,7 @@ class TestTokenizerConfig:
         assert cfg.model_type == "unigram"
         assert cfg.character_coverage == 0.99995
         assert cfg.byte_fallback is True
-        assert cfg.input_sentence_size == 10_000_000
+        assert cfg.input_sentence_size == 20_000_000
         assert cfg.shuffle_input_sentence is True
         assert cfg.num_threads == 16
         assert cfg.num_sub_iterations == 2
