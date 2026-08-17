@@ -55,7 +55,7 @@ class PretrainDataset(Dataset):  # type: ignore[type-arg]
             return_tensors=None,
         )
         input_ids = torch.tensor(encoded["input_ids"], dtype=torch.long)
-        # labels = input_ids (Causal LM 的 shift 由 CrossEntropyLoss 隐式处理)
+        # labels = input_ids; Causal LM 的 shift 在 loss 函数中处理 (labels 右移一位)
         return {"input_ids": input_ids, "labels": input_ids.clone()}
 
 
@@ -149,8 +149,9 @@ def _build_sft_labels(
     2. 从 <|assistant|>+1 到 <|end|> 之间的 token 保留 label
     3. 其余位置设为 -100 (CrossEntropyLoss 的 ignore_index)
 
-    注意: CrossEntropyLoss 内部做 predict[t]→target[t] 的隐式 shift,
-    所以 <|assistant|> 本身不需要被预测, 但 <|assistant|>+1 开始的内容需要。
+    注意: labels 标记需要预测的 assistant 内容 token (不含 <|assistant|> 本身)。
+    Causal LM 的 shift 由 loss 函数统一处理 (labels 右移一位)，
+    使位置 t 的 logits 预测位置 t+1 的 token。
 
     ChatML 示例:
         <|bos|> <|sys|> ... <|end|> <|user|> ... <|end|> <|asst|> A <|end|> <|eos|>

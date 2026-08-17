@@ -58,12 +58,12 @@ class TestPretrainLossFn:
         labels = torch.tensor([[3, 7, -100, -100, -100]])
 
         logits = torch.full((batch_size, seq_len, vocab_size), -1e9)
-        logits[0, 0, 3] = 1e9
-        logits[0, 1, 7] = 1e9
+        # shift 后: 位置 0 预测 labels[1]=7
+        logits[0, 0, 7] = 1e9
         # 忽略位置给错误高分 — 不影响 loss
+        logits[0, 1, 0] = 1e9
         logits[0, 2, 0] = 1e9
         logits[0, 3, 0] = 1e9
-        logits[0, 4, 0] = 1e9
 
         model = _MockModel(logits)
         batch = {
@@ -95,11 +95,12 @@ class TestPretrainLossFn:
         labels[:, 3:] = -100
 
         logits = torch.full((batch_size, seq_len, vocab_size), -1e9)
+        # shift 后: 位置 s 预测 labels[s+1]。活跃位置 0,1 (labels[1], labels[2] 有效)
         for b in range(batch_size):
-            for s in range(3):
-                logits[b, s, labels[b, s]] = 1e9
-        # 忽略位置给随机值
-        logits[:, 3:, :] = torch.randn(batch_size, 3, vocab_size)
+            for s in range(2):
+                logits[b, s, labels[b, s + 1]] = 1e9
+        # 忽略位置 (shift 后位置 2,3,4) 给随机值
+        logits[:, 2:, :] = torch.randn(batch_size, seq_len - 2, vocab_size)
 
         model = _MockModel(logits)
         batch = {
@@ -119,7 +120,8 @@ class TestPretrainLossFn:
         labels = torch.randint(0, vocab_size, (batch_size, seq_len))
 
         logits = torch.full((batch_size, seq_len, vocab_size), -1e9)
-        logits = logits.scatter(-1, labels.unsqueeze(-1), 1e9)
+        # 完美预测: 位置 s 预测 labels[s+1]
+        logits[:, :-1] = logits[:, :-1].scatter(-1, labels[:, 1:].unsqueeze(-1), 1e9)
 
         model = _MockModel(logits)
         batch = {
@@ -145,8 +147,8 @@ class TestPretrainLossFn:
 
         logits_better = logits_random.clone()
         for b in range(batch_size):
-            for s in range(seq_len):
-                logits_better[b, s, labels[b, s]] += 5.0
+            for s in range(seq_len - 1):
+                logits_better[b, s, labels[b, s + 1]] += 5.0
         model_better = _MockModel(logits_better)
         loss_better = pretrain_loss_fn(model_better, batch)
 
@@ -167,8 +169,9 @@ class TestPretrainLossFn:
             },
         )
 
-        logits_perfect = torch.full((batch_size, seq_len, vocab_size), -1e9).scatter(
-            -1, labels.unsqueeze(-1), 1e9
+        logits_perfect = torch.full((batch_size, seq_len, vocab_size), -1e9)
+        logits_perfect[:, :-1] = logits_perfect[:, :-1].scatter(
+            -1, labels[:, 1:].unsqueeze(-1), 1e9
         )
         model_perfect = _MockModel(logits_perfect)
         loss_perfect = pretrain_loss_fn(
@@ -183,12 +186,12 @@ class TestPretrainLossFn:
 
     # ── 边界情况 ──────────────────────────────────────────────────────
 
-    def test_single_token_sequence(self) -> None:
-        """单 token 序列正常工作。"""
-        batch_size, seq_len, vocab_size = 1, 1, 10
-        labels = torch.tensor([[5]])
+    def test_minimal_two_token_sequence(self) -> None:
+        """两 token 序列（最小有效长度）正常工作。"""
+        batch_size, seq_len, vocab_size = 1, 2, 10
+        labels = torch.tensor([[5, 3]])
         logits = torch.full((batch_size, seq_len, vocab_size), -1e9)
-        logits[0, 0, 5] = 1e9
+        logits[0, 0, 3] = 1e9  # 位置 0 预测 labels[1]=3
 
         model = _MockModel(logits)
         batch = {
@@ -199,6 +202,24 @@ class TestPretrainLossFn:
         loss = pretrain_loss_fn(model, batch)
         assert loss.dim() == 0
         assert loss.item() < 0.01
+
+    def test_copying_input_is_not_zero_loss(self) -> None:
+        """回归测试: 模型"复制"输入 token 不会让 loss 接近 0（shift 生效）。"""
+        vocab_size = 10
+        batch_size, seq_len = 2, 5
+        input_ids = torch.randint(0, vocab_size, (batch_size, seq_len))
+        labels = input_ids.clone()
+
+        # 模型在每个位置给"自身 token"最高分（复制行为）
+        logits = torch.full((batch_size, seq_len, vocab_size), -1e9)
+        logits = logits.scatter(-1, input_ids.unsqueeze(-1), 1e9)
+
+        model = _MockModel(logits)
+        batch = {"input_ids": input_ids, "labels": labels}
+
+        loss = pretrain_loss_fn(model, batch)
+        # 正确答案是下一个 token，复制自身应产生高 loss
+        assert loss.item() > 1.0
 
     def test_large_batch(self) -> None:
         """较大 batch size 正常工作。"""

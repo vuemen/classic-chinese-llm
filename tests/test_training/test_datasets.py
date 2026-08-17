@@ -221,7 +221,7 @@ class TestPretrainDataset:
     def test_labels_equal_input_ids(
         self, pretrain_jsonl: Path, pretrain_tokenizer: MockPretrainTokenizer
     ) -> None:
-        """labels 是 input_ids 的副本（Causal LM 的 shift 由 attention mask 隐式处理）。"""
+        """labels 是 input_ids 的副本（Causal LM 的 shift 在 loss 函数中处理）。"""
         ds = PretrainDataset(pretrain_jsonl, pretrain_tokenizer)
         item = ds[0]
 

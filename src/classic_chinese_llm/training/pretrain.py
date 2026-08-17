@@ -31,6 +31,7 @@ def pretrain_loss_fn(model: nn.Module, batch: dict[str, torch.Tensor]) -> torch.
 
     标准 next-token prediction:
     - 模型通过 causal attention 自动限制每个位置只看向历史 token
+    - 位置 t 的 logits 预测位置 t+1 的 token，因此 labels 需右移一位
     - labels 中 PAD 位置已设为 -100 (CrossEntropyLoss 的 ignore_index)
 
     Args:
@@ -41,9 +42,12 @@ def pretrain_loss_fn(model: nn.Module, batch: dict[str, torch.Tensor]) -> torch.
         标量 loss。
     """
     logits = model(input_ids=batch["input_ids"])  # (B, S, vocab_size)
+    # Causal LM 的 shift: 位置 t 预测 t+1, 丢弃最后一个位置的预测
+    shift_logits = logits[:, :-1, :].contiguous()
+    shift_labels = batch["labels"][:, 1:].contiguous()
     loss = F.cross_entropy(
-        logits.view(-1, logits.size(-1)),
-        batch["labels"].view(-1),
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
         ignore_index=-100,
     )
     return loss

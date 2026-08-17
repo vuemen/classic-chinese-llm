@@ -34,12 +34,16 @@ logger = get_logger(__name__)
 def sft_loss_fn(model: nn.Module, batch: dict[str, torch.Tensor]) -> torch.Tensor:
     """SFT loss —— labels 已由 DataCollator/SFTDataset 预处理完成。
 
-    非 assistant 位置已设为 -100, 此函数与 pretrain_loss_fn 结构相同。
+    非 assistant 位置已设为 -100, 此函数与 pretrain_loss_fn 结构相同,
+    同样需要 Causal LM 的 shift (位置 t 预测 t+1)。
     """
     logits = model(input_ids=batch["input_ids"])
+    # Causal LM 的 shift: 位置 t 预测 t+1
+    shift_logits = logits[:, :-1, :].contiguous()
+    shift_labels = batch["labels"][:, 1:].contiguous()
     loss = F.cross_entropy(
-        logits.view(-1, logits.size(-1)),
-        batch["labels"].view(-1),
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
         ignore_index=-100,
     )
     return loss
