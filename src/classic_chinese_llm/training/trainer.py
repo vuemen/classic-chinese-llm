@@ -351,12 +351,12 @@ class Trainer:
         self.epoch = state.epoch
         self.best_loss = state.best_loss
 
-        # 恢复 RNG 状态
+        # 恢复 RNG 状态 (RNG state 是 CPU 概念; map_location 可能将其搬到 GPU, 需搬回 CPU)
         if state.rng_state:
-            torch.random.set_rng_state(state.rng_state["torch"])
+            torch.random.set_rng_state(state.rng_state["torch"].cpu())
             cuda_state = state.rng_state.get("cuda")
             if cuda_state and torch.cuda.is_available():
-                torch.cuda.random.set_rng_state_all(cuda_state)
+                torch.cuda.random.set_rng_state_all([s.cpu() for s in cuda_state])
 
         logger.info(
             "训练恢复完成: step=%d, epoch=%d, best_loss=%.4f",
